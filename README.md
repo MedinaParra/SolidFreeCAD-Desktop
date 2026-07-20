@@ -25,7 +25,7 @@ This keeps the custom code reviewable while ensuring that every resulting applic
 - Light SolidFreeCAD ribbon shell.
 - Native FreeCAD actions, icons, translations, shortcuts and enabled states.
 - File commands: New, Open, Save, Undo and Redo.
-- View commands: Fit All and Axonometric.
+- View commands: Fit All and Isometric.
 - Part Design entries: Body, Sketch, Pad, Pocket, Fillet and Chamfer.
 - Dynamic ribbon refresh when FreeCAD modules register commands.
 - Global command search over the registered FreeCAD command catalogue.
@@ -33,6 +33,8 @@ This keeps the custom code reviewable while ensuring that every resulting applic
 - Command-catalogue verification against the official source.
 - Overlay unit tests.
 - Ubuntu validation and compilation workflows.
+- Persistent compiler cache saved immediately after successful compilation.
+- Xvfb smoke tests and automatic screenshot capture.
 
 ## Prepare a source tree
 
@@ -59,12 +61,14 @@ InterfaceMode = Classic | SolidFreeCAD
 
 ## Validation status
 
-The repository contains unit, source-validation and Ubuntu compilation workflows. No successful GitHub Actions execution has been reported yet, so the C++ integration and Ubuntu binary remain unverified until Actions runs and returns build results.
+The source-validation workflow passes against the official FreeCAD 1.1.1 tree. GitHub Actions has also successfully configured and compiled both `libFreeCADGui.so` and the FreeCAD GUI executable with the SolidFreeCAD overlay.
+
+The remaining bootstrap gate is the automated Xvfb launch test. Binary verification now uses non-interactive linkage checks, while the dedicated GUI scripts launch FreeCAD with explicit timeouts, validate the ribbon and Classic recovery modes, and capture the first screenshot.
 
 ## Next milestone
 
-1. Obtain the first successful `FreeCADGui` Ubuntu build.
-2. Launch the application under Xvfb and assert that `SolidFreeCADRibbon` exists.
+1. Complete the SolidFreeCAD and Classic Xvfb smoke tests.
+2. Publish the first real GUI screenshot.
 3. Generate an installable development artifact.
 4. Replace the single toolbar with real tabbed ribbon pages.
 5. Begin the Feature Manager and Property Manager adaptations.
