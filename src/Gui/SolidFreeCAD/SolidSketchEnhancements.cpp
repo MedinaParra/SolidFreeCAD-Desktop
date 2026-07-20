@@ -1,7 +1,10 @@
 #include "SolidSketchEnhancements.h"
 
 #include <QAction>
+#include <QEvent>
+#include <QLabel>
 #include <QMenu>
+#include <QPointer>
 #include <QStyle>
 #include <QTimer>
 #include <QToolBar>
@@ -26,6 +29,80 @@ constexpr unsigned long rgba(unsigned char red,
         | (static_cast<unsigned long>(blue) << 8)
         | static_cast<unsigned long>(alpha);
 }
+
+class CompactMenuArrow final : public QLabel
+{
+public:
+    explicit CompactMenuArrow(QToolButton* button)
+        : QLabel(button)
+        , button_(button)
+    {
+        setObjectName(QStringLiteral("SolidFreeCADMenuArrow"));
+        setText(QStringLiteral("▾"));
+        setAlignment(Qt::AlignCenter);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setFixedSize(9, 9);
+        setStyleSheet(QStringLiteral(R"QSS(
+            QLabel#SolidFreeCADMenuArrow {
+                color: #4b4b4b;
+                background: transparent;
+                border: 0;
+                font-size: 9px;
+                font-weight: 600;
+                padding: 0;
+                margin: 0;
+            }
+            QLabel#SolidFreeCADMenuArrow:disabled {
+                color: #aaaaaa;
+            }
+        )QSS"));
+
+        button_->installEventFilter(this);
+        reposition();
+        show();
+        raise();
+    }
+
+    ~CompactMenuArrow() override
+    {
+        if (button_) {
+            button_->removeEventFilter(this);
+        }
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == button_ && event) {
+            switch (event->type()) {
+                case QEvent::Resize:
+                case QEvent::Move:
+                case QEvent::Show:
+                case QEvent::EnabledChange:
+                    reposition();
+                    break;
+                default:
+                    break;
+            }
+        }
+        return QLabel::eventFilter(watched, event);
+    }
+
+private:
+    void reposition()
+    {
+        if (!button_) {
+            return;
+        }
+
+        move(qMax(0, button_->width() - width() - 2),
+             qMax(0, button_->height() - height() - 1));
+        setEnabled(button_->isEnabled());
+        raise();
+    }
+
+    QPointer<QToolButton> button_;
+};
 }  // namespace
 
 namespace SolidFreeCAD
@@ -153,13 +230,13 @@ void SolidSketchEnhancements::refreshRibbon()
         return;
     }
 
-    configureCompactMenuArrows(ribbon);
-
     const auto commandStrips =
         ribbon->findChildren<QToolBar*>(QStringLiteral("SolidFreeCADCommandStrip"));
     for (QToolBar* toolbar : commandStrips) {
         configureSmartDimension(toolbar);
     }
+
+    configureCompactMenuArrows(ribbon);
 }
 
 void SolidSketchEnhancements::configureSmartDimension(QToolBar* toolbar)
@@ -223,23 +300,40 @@ void SolidSketchEnhancements::configureSmartDimension(QToolBar* toolbar)
 
 void SolidSketchEnhancements::configureCompactMenuArrows(QToolBar* ribbon)
 {
-    if (!ribbon || ribbon->property("SolidFreeCADCompactMenuArrows").toBool()) {
+    if (!ribbon) {
         return;
     }
 
-    ribbon->setStyleSheet(ribbon->styleSheet() + QStringLiteral(R"QSS(
-        QToolBar#SolidFreeCADRibbon QToolButton::menu-indicator {
-            image: url(:/SolidFreeCAD/arrow-down.svg);
-            subcontrol-origin: padding;
-            subcontrol-position: bottom right;
-            width: 7px;
-            height: 5px;
-            border: none;
-            margin-right: 3px;
-            margin-bottom: 2px;
+    if (!ribbon->property("SolidFreeCADNativeMenuIndicatorsHidden").toBool()) {
+        ribbon->setStyleSheet(ribbon->styleSheet() + QStringLiteral(R"QSS(
+            QToolBar#SolidFreeCADRibbon QToolButton::menu-indicator {
+                image: none;
+                width: 0px;
+                height: 0px;
+                border: 0;
+                margin: 0;
+                padding: 0;
+            }
+        )QSS"));
+        ribbon->setProperty("SolidFreeCADNativeMenuIndicatorsHidden", true);
+    }
+
+    const auto buttons = ribbon->findChildren<QToolButton*>();
+    for (QToolButton* button : buttons) {
+        if (!button) {
+            continue;
         }
-    )QSS"));
-    ribbon->setProperty("SolidFreeCADCompactMenuArrows", true);
+
+        const bool hasPopup = button->menu() != nullptr
+            || button->popupMode() != QToolButton::DelayedPopup;
+        if (!hasPopup
+            || button->findChild<QLabel*>(QStringLiteral("SolidFreeCADMenuArrow"),
+                                          Qt::FindDirectChildrenOnly)) {
+            continue;
+        }
+
+        new CompactMenuArrow(button);
+    }
 }
 
 bool SolidSketchEnhancements::addMenuCommand(QMenu* menu,
