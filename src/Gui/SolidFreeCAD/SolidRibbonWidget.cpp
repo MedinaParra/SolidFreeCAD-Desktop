@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QSize>
+#include <QSizePolicy>
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QToolBar>
@@ -249,7 +250,9 @@ void SolidRibbonWidget::rebuild()
         pages_->removeWidget(page);
         page->deleteLater();
     }
-    tabs_->clear();
+    while (tabs_->count() > 0) {
+        tabs_->removeTab(tabs_->count() - 1);
+    }
 
     addRibbonPages();
     tabs_->setCurrentIndex(0);
