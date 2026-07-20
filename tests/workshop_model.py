@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import FreeCAD as App
 import Part
-import PartDesign  # noqa: F401 - registers Part Design document types
+import _PartDesign  # noqa: F401 - registers PartDesign document object types
 import Sketcher
 
 
