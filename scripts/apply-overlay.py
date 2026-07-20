@@ -21,7 +21,14 @@ DESTRUCTOR_INSERT = DESTRUCTOR_ANCHOR + "    SolidFreeCAD::uninstallGui();\n"
 SKETCH_EDIT_ANCHOR = "    Workbench::enterEditMode();\n\n"
 SKETCH_EDIT_INSERT = (
     SKETCH_EDIT_ANCHOR
-    + "    // SolidFreeCAD: display native faces for closed profiles during sketch editing.\n"
+    + "    // SolidFreeCAD: rebuild and display native faces for closed profiles while editing.\n"
+    + "    const auto& solidFreeCADProfileShape = getSketchObject()->InternalShape.getValue();\n"
+    + "    setupCoinGeometry(\n"
+    + "        solidFreeCADProfileShape,\n"
+    + "        pcSketchFaces,\n"
+    + "        this->Deviation.getValue(),\n"
+    + "        this->AngularDeflection.getValue()\n"
+    + "    );\n"
     + "    pcSketchFacesToggle->on = true;\n\n"
 )
 
