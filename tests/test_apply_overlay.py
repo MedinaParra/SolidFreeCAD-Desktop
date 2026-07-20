@@ -35,6 +35,26 @@ class ApplyOverlayTest(unittest.TestCase):
             "}\n",
             encoding="utf-8",
         )
+
+        sketch_gui = root / "src" / "Mod" / "Sketcher" / "Gui"
+        sketch_gui.mkdir(parents=True)
+        (sketch_gui / "ViewProviderSketch.cpp").write_text(
+            "bool ViewProviderSketch::setEdit(int ModNum)\n"
+            "{\n"
+            "    Workbench::enterEditMode();\n"
+            "\n"
+            "    return true;\n"
+            "}\n"
+            "\n"
+            "void ViewProviderSketch::unsetEdit(int ModNum)\n"
+            "{\n"
+            "    if (ModNum != ViewProviderSketch::Default) {\n"
+            "        return PartGui::ViewProvider2DObject::unsetEdit(ModNum);\n"
+            "    }\n"
+            "\n"
+            "}\n",
+            encoding="utf-8",
+        )
         return root
 
     def run_apply(self, freecad_root: Path) -> None:
@@ -55,11 +75,23 @@ class ApplyOverlayTest(unittest.TestCase):
 
             cmake = (gui / "CMakeLists.txt").read_text(encoding="utf-8")
             main_window = (gui / "MainWindow.cpp").read_text(encoding="utf-8")
+            sketch_view = (
+                freecad_root
+                / "src"
+                / "Mod"
+                / "Sketcher"
+                / "Gui"
+                / "ViewProviderSketch.cpp"
+            ).read_text(encoding="utf-8")
 
             self.assertIn("add_subdirectory(SolidFreeCAD)", cmake)
             self.assertIn('#include "SolidFreeCAD/SolidGuiBootstrap.h"', main_window)
             self.assertIn("SolidFreeCAD::installGui(this);", main_window)
             self.assertIn("SolidFreeCAD::uninstallGui();", main_window)
+            self.assertIn("pcSketchFacesToggle->on = true;", sketch_view)
+            self.assertIn(
+                "pcSketchFacesToggle->on = Visibility.getValue();", sketch_view
+            )
 
     def test_overlay_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -70,10 +102,22 @@ class ApplyOverlayTest(unittest.TestCase):
             gui = freecad_root / "src" / "Gui"
             cmake = (gui / "CMakeLists.txt").read_text(encoding="utf-8")
             main_window = (gui / "MainWindow.cpp").read_text(encoding="utf-8")
+            sketch_view = (
+                freecad_root
+                / "src"
+                / "Mod"
+                / "Sketcher"
+                / "Gui"
+                / "ViewProviderSketch.cpp"
+            ).read_text(encoding="utf-8")
 
             self.assertEqual(cmake.count("add_subdirectory(SolidFreeCAD)"), 1)
             self.assertEqual(main_window.count("SolidFreeCAD::installGui(this);"), 1)
             self.assertEqual(main_window.count("SolidFreeCAD::uninstallGui();"), 1)
+            self.assertEqual(sketch_view.count("pcSketchFacesToggle->on = true;"), 1)
+            self.assertEqual(
+                sketch_view.count("pcSketchFacesToggle->on = Visibility.getValue();"), 1
+            )
 
 
 if __name__ == "__main__":
