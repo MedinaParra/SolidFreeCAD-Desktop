@@ -150,6 +150,10 @@ jobs:
           SOLIDFREECAD_VERTICAL_SLICE: ${{ env.VERTICAL_SLICE_PATH }}
         run: |
           set -o pipefail
+          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/vertical"
+          rm -rf "${XDG_RUNTIME_DIR}"
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          chmod 700 "${XDG_RUNTIME_DIR}"
           rm -f /tmp/.X90-lock /tmp/.X11-unix/X90
           xvfb-run -n 90 -e build/logs/xvfb-vertical-slice.log \
             -s "-screen 0 1920x1080x24" timeout 90s \
@@ -165,6 +169,10 @@ jobs:
           SOLIDFREECAD_SKETCH_SCREENSHOT: ${{ env.SKETCH_SCREENSHOT_PATH }}
         run: |
           set -o pipefail
+          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/gui"
+          rm -rf "${XDG_RUNTIME_DIR}"
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          chmod 700 "${XDG_RUNTIME_DIR}"
           rm -f /tmp/.X91-lock /tmp/.X11-unix/X91
           xvfb-run -n 91 -e build/logs/xvfb-gui.log \
             -s "-screen 0 1920x1080x24" timeout 90s \
@@ -181,6 +189,10 @@ jobs:
           SOLIDFREECAD_EXPECT_CLASSIC: "1"
         run: |
           set -o pipefail
+          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/classic"
+          rm -rf "${XDG_RUNTIME_DIR}"
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          chmod 700 "${XDG_RUNTIME_DIR}"
           rm -f /tmp/.X92-lock /tmp/.X11-unix/X92
           xvfb-run -n 92 -e build/logs/xvfb-classic.log \
             -s "-screen 0 1920x1080x24" timeout 90s \
