@@ -18,6 +18,24 @@ INSTALL_LINE = "    SolidFreeCAD::installGui(this);\n\n"
 DESTRUCTOR_ANCHOR = "MainWindow::~MainWindow()\n{\n"
 DESTRUCTOR_INSERT = DESTRUCTOR_ANCHOR + "    SolidFreeCAD::uninstallGui();\n"
 
+SKETCH_EDIT_ANCHOR = "    Workbench::enterEditMode();\n\n"
+SKETCH_EDIT_INSERT = (
+    SKETCH_EDIT_ANCHOR
+    + "    // SolidFreeCAD: display native faces for closed profiles during sketch editing.\n"
+    + "    pcSketchFacesToggle->on = true;\n\n"
+)
+
+SKETCH_UNSET_ANCHOR = (
+    "    if (ModNum != ViewProviderSketch::Default) {\n"
+    "        return PartGui::ViewProvider2DObject::unsetEdit(ModNum);\n"
+    "    }\n\n"
+)
+SKETCH_UNSET_INSERT = (
+    SKETCH_UNSET_ANCHOR
+    + "    // SolidFreeCAD: leave profile shading with the normal object visibility lifecycle.\n"
+    + "    pcSketchFacesToggle->on = Visibility.getValue();\n\n"
+)
+
 
 def insert_once(text: str, anchor: str, insertion: str, description: str) -> str:
     if insertion in text:
@@ -32,8 +50,11 @@ def apply(repo_root: Path, freecad_root: Path) -> None:
     destination_overlay = freecad_root / "src" / "Gui" / "SolidFreeCAD"
     cmake_file = freecad_root / "src" / "Gui" / "CMakeLists.txt"
     main_window_file = freecad_root / "src" / "Gui" / "MainWindow.cpp"
+    sketch_view_file = (
+        freecad_root / "src" / "Mod" / "Sketcher" / "Gui" / "ViewProviderSketch.cpp"
+    )
 
-    for required in (source_overlay, cmake_file, main_window_file):
+    for required in (source_overlay, cmake_file, main_window_file, sketch_view_file):
         if not required.exists():
             raise FileNotFoundError(required)
 
@@ -73,6 +94,21 @@ def apply(repo_root: Path, freecad_root: Path) -> None:
             "MainWindow destructor",
         )
     main_window_file.write_text(main_text, encoding="utf-8")
+
+    sketch_text = sketch_view_file.read_text(encoding="utf-8")
+    sketch_text = insert_once(
+        sketch_text,
+        SKETCH_EDIT_ANCHOR,
+        SKETCH_EDIT_INSERT,
+        "Sketcher edit-mode profile shading",
+    )
+    sketch_text = insert_once(
+        sketch_text,
+        SKETCH_UNSET_ANCHOR,
+        SKETCH_UNSET_INSERT,
+        "Sketcher unset-edit profile shading",
+    )
+    sketch_view_file.write_text(sketch_text, encoding="utf-8")
 
     marker = freecad_root / "SOLIDFREECAD_OVERLAY_APPLIED"
     marker.write_text("SolidFreeCAD GUI overlay applied\n", encoding="utf-8")
