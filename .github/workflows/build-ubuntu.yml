@@ -58,11 +58,13 @@ jobs:
         run: ./package/ubuntu/install-apt-packages.sh
 
       - name: Restore compiler cache
-        uses: actions/cache@v4
+        id: ccache-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py') }}
+          key: solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py') }}-${{ github.run_id }}
           restore-keys: |
+            solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py') }}-
             solidfreecad-ubuntu22-gcc-
 
       - name: Configure official FreeCAD source
@@ -95,11 +97,17 @@ jobs:
             --parallel 2 \
             2>&1 | tee build/logs/build-freecad.log
 
+      - name: Save compiler cache after successful compilation
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py') }}-${{ github.run_id }}
+
       - name: Verify build products
         run: |
           test -f "${BUILD_DIR}/lib/libFreeCADGui.so"
           test -x "${BUILD_DIR}/bin/FreeCAD"
-          xvfb-run -a "${BUILD_DIR}/bin/FreeCAD" --version
+          ldd "${BUILD_DIR}/bin/FreeCAD" | grep -q "libFreeCADGui"
 
       - name: Run SolidFreeCAD GUI smoke test
         env:
