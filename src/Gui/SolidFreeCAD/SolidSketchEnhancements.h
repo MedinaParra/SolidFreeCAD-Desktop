@@ -5,7 +5,6 @@
 
 #include <boost/signals2/connection.hpp>
 
-class QEvent;
 class QMenu;
 class QToolBar;
 
@@ -25,9 +24,6 @@ public:
 
     bool install(Gui::MainWindow* mainWindow);
     void uninstall();
-
-protected:
-    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void applySketchPalette();
