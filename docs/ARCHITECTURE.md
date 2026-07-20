@@ -14,35 +14,50 @@ SolidFreeCAD Desktop is a GUI layer over the official FreeCAD 1.1.1 source. It d
 - Assembly, TechDraw, FEM and other official modules.
 - Python interpreter and macro infrastructure.
 - `Gui::CommandManager` and the registered command catalogue.
+- Native `Gui::Action` and `QAction` objects.
 - `Gui::View3DInventor`, Coin3D/OpenGL and ViewProviders.
 - TaskView, property editors, workbench activation and module loading.
 
-## SolidFreeCAD components
+## Implemented SolidFreeCAD components
 
-The isolated GUI layer begins under `src/Gui/SolidFreeCAD`:
+The isolated GUI layer lives under `src/Gui/SolidFreeCAD`:
 
 - `SolidCommandBridge`: resolves and invokes official FreeCAD commands.
-- `SolidGuiManager`: installs or removes the new interface shell.
-- `SolidRibbon`: grouped mechanical-design commands.
-- Later: command search, welcome page, feature manager, property manager and theme manager.
+- `SolidCommandSearch`: searchable catalogue of all registered commands.
+- `SolidGuiBootstrap`: interface-mode selection and recovery path.
+- `SolidGuiManager`: installs, refreshes and removes the interface shell.
+- Light ribbon prototype containing native FreeCAD actions.
 
-## Integration stages
+The current ribbon refreshes when `Gui::CommandManager::signalChanged` reports that a workbench or module has registered more commands. This allows Part Design entries to become native actions after their module is loaded.
+
+## Integration strategy
 
 ### Stage A — non-destructive shell
 
-Keep `Gui::MainWindow`, the official MDI area, ComboView, TaskView and 3D viewer. Add a SolidFreeCAD ribbon and retain the classic interface.
+Keep `Gui::MainWindow`, the official MDI area, ComboView, TaskView and 3D viewer. Insert the SolidFreeCAD shell near the end of `MainWindow` initialization and remove it before main-window teardown.
 
-### Stage B — adapted panels
+The classic interface remains available through:
 
-Restyle the document tree and property/task presentation while retaining their official models and controllers.
+- `SOLIDFREECAD_CLASSIC_MODE=1`.
+- FreeCAD preference `BaseApp/Preferences/SolidFreeCAD/InterfaceMode=Classic`.
 
-### Stage C — default interface mode
+### Stage B — tabbed ribbon
 
-After command coverage and regression tests, make SolidFreeCAD the default shell while keeping Classic mode available.
+Replace the single toolbar prototype with a dedicated tabbed ribbon while continuing to host the official FreeCAD actions. No modeling command is reimplemented.
+
+### Stage C — adapted panels
+
+Restyle or wrap the document tree, PropertyView and TaskView while retaining their official models and controllers.
+
+### Stage D — default SolidFreeCAD experience
+
+After command coverage, file-cycle regression tests and Ubuntu packaging are stable, make SolidFreeCAD the default shell while keeping Classic mode available.
 
 ## Command rule
 
 Production GUI controls must invoke registered FreeCAD commands or official APIs. CAD operations must not be duplicated inside the new GUI.
+
+The preferred integration is `Gui::Command::addTo(QWidget*)`, which preserves the official icon, translation, shortcut, activation logic and enabled state.
 
 ## Viewer rule
 
@@ -50,7 +65,15 @@ The Android Canvas preview is not used for desktop geometry. `Gui::View3DInvento
 
 ## Compatibility rule
 
-Documents using official FreeCAD object types must remain openable in unmodified FreeCAD 1.1.1.
+Documents using official FreeCAD object types must remain openable in unmodified FreeCAD 1.1.1. Custom SolidFreeCAD document objects are prohibited until an explicit compatibility and migration design exists.
+
+## Validation layers
+
+1. Python unit tests for overlay application and idempotence.
+2. Source checks against the official 1.1.1 APIs and command catalogue.
+3. CMake compilation of `FreeCADGui` and the FreeCAD executable.
+4. Xvfb GUI smoke test checking the ribbon, search box and native actions.
+5. Automated screenshot capture for visual inspection.
 
 ## Upstream maintenance
 
