@@ -53,12 +53,14 @@ jobs:
         run: |
           test -f build/freecad-source/SOLIDFREECAD_OVERLAY_APPLIED
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiManager.cpp
+          test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidCommandSearch.cpp
           grep -q "add_subdirectory(SolidFreeCAD)" build/freecad-source/src/Gui/CMakeLists.txt
           grep -q '#include "SolidFreeCAD/SolidGuiBootstrap.h"' build/freecad-source/src/Gui/MainWindow.cpp
           grep -q "SolidFreeCAD::installGui(this);" build/freecad-source/src/Gui/MainWindow.cpp
           grep -q "SolidFreeCAD::uninstallGui();" build/freecad-source/src/Gui/MainWindow.cpp
-          grep -q 'command->addTo(ribbon_)' build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiManager.cpp
+          grep -q 'command->addTo(toolbar)' build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
+          grep -q 'SolidFreeCADRibbonTabs' build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           grep -q 'SOLIDFREECAD_CLASSIC_MODE' build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiBootstrap.cpp
 
       - name: Verify overlay is idempotent
