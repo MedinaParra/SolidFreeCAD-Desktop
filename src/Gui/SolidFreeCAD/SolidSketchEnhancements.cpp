@@ -1,8 +1,6 @@
 #include "SolidSketchEnhancements.h"
 
 #include <QAction>
-#include <QApplication>
-#include <QEvent>
 #include <QMenu>
 #include <QSet>
 #include <QStyle>
@@ -51,19 +49,19 @@ bool SolidSketchEnhancements::install(Gui::MainWindow* mainWindow)
     installed_ = true;
     applySketchPalette();
 
-    if (qApp) {
-        qApp->installEventFilter(this);
-    }
-
     auto& commandManager = Gui::Application::Instance->commandManager();
     commandChangedConnection_ = commandManager.signalChanged.connect([this]() {
         QTimer::singleShot(0, this, [this]() { refreshRibbon(); });
     });
 
+    // FreeCAD registers mechanical commands and restores toolbar contents in deferred passes.
+    // These bounded refreshes avoid observing every Qt child/polish event, which can feed back
+    // into ribbon layout and keep the event queue permanently busy.
     refreshRibbon();
     QTimer::singleShot(0, this, [this]() { refreshRibbon(); });
     QTimer::singleShot(250, this, [this]() { refreshRibbon(); });
     QTimer::singleShot(750, this, [this]() { refreshRibbon(); });
+    QTimer::singleShot(1500, this, [this]() { refreshRibbon(); });
     return true;
 }
 
@@ -74,30 +72,9 @@ void SolidSketchEnhancements::uninstall()
     }
 
     commandChangedConnection_.disconnect();
-    if (qApp) {
-        qApp->removeEventFilter(this);
-    }
-
     restoreSketchPalette();
     mainWindow_.clear();
     installed_ = false;
-}
-
-bool SolidSketchEnhancements::eventFilter(QObject* watched, QEvent* event)
-{
-    if (!installed_ || !event) {
-        return QObject::eventFilter(watched, event);
-    }
-
-    const auto type = event->type();
-    if (type == QEvent::Show || type == QEvent::Polish || type == QEvent::ChildAdded) {
-        if (watched == mainWindow_ || qobject_cast<QToolBar*>(watched)
-            || qobject_cast<QToolButton*>(watched)) {
-            QTimer::singleShot(0, this, [this]() { refreshRibbon(); });
-        }
-    }
-
-    return QObject::eventFilter(watched, event);
 }
 
 void SolidSketchEnhancements::applySketchPalette()
@@ -123,7 +100,6 @@ void SolidSketchEnhancements::applySketchPalette()
         viewParameters->GetUnsigned("FullyConstraintInternalAlignmentColor", 0xDEDEC8FF);
     previousSketchFaceColor_ = sketchParameters->GetUnsigned("SketchFaceColor", 0x54ABFF40);
 
-    // Fully constrained sketch geometry uses a neutral black, matching a drafting convention.
     viewParameters->SetUnsigned("FullyConstrainedColor", rgba(0, 0, 0));
     viewParameters->SetUnsigned("FullyConstraintElementColor", rgba(0, 0, 0));
     viewParameters->SetUnsigned(
@@ -133,8 +109,7 @@ void SolidSketchEnhancements::applySketchPalette()
         "FullyConstraintInternalAlignmentColor", rgba(96, 96, 96)
     );
 
-    // Closed sketch wires are rendered by FreeCAD's native SoSketchFaces node.
-    // The alpha byte keeps this fill visible only as a translucent sketch aid.
+    // FreeCAD's native SoSketchFaces renderer only produces faces for closed sketch wires.
     sketchParameters->SetUnsigned("SketchFaceColor", rgba(151, 158, 188, 92));
 
     paletteApplied_ = true;
@@ -203,12 +178,12 @@ void SolidSketchEnhancements::configureSmartDimension(QToolBar* toolbar)
             continue;
         }
 
-        action->setText(tr("Cota inteligente"));
         auto* button = qobject_cast<QToolButton*>(toolbar->widgetForAction(action));
         if (!button || button->property("SolidFreeCADSmartDimensionConfigured").toBool()) {
             continue;
         }
 
+        action->setText(tr("Cota inteligente"));
         auto* menu = new QMenu(button);
         menu->setObjectName(QStringLiteral("SolidFreeCADSmartDimensionMenu"));
         addMenuCommand(menu, "Sketcher_Dimension", "Cota inteligente");
