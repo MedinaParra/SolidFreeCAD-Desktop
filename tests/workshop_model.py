@@ -32,8 +32,7 @@ def create_workshop_part(
     if width <= 0 or height <= 0 or pad_length <= 0:
         raise ValueError("Workshop model dimensions must be positive")
 
-    existing = App.getDocument(document_name)
-    if existing is not None:
+    if document_name in App.listDocuments():
         App.closeDocument(document_name)
 
     document = App.newDocument(document_name)
