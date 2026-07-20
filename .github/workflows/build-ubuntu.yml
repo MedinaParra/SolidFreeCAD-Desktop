@@ -85,6 +85,17 @@ jobs:
             -DFREECAD_USE_PCH=OFF \
             2>&1 | tee build/logs/configure.log
 
+      - name: Build Material runtime and standard resources
+        run: |
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" \
+            --target Materials MaterialScripts MaterialToolsLib MaterialLib MaterialModelLib AppearanceLib \
+            --parallel 2 \
+            2>&1 | tee build/logs/build-material-runtime.log
+          find "${BUILD_DIR}" \
+            -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' \
+            -print -quit | grep -q .
+
       - name: Build FreeCADGui
         run: |
           set -o pipefail
@@ -123,6 +134,7 @@ jobs:
           test -x "${BUILD_DIR}/bin/FreeCAD"
           ldd "${BUILD_DIR}/bin/FreeCAD" | grep -q "libFreeCADGui"
           find "${BUILD_DIR}/Mod/PartDesign" -maxdepth 1 -name 'PartDesignGui*' -print -quit | grep -q .
+          find "${BUILD_DIR}" -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' -print -quit | grep -q .
 
       - name: Run workshop Part Sketch Pad persistence test
         env:
