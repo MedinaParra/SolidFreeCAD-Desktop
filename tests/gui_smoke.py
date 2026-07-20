@@ -105,6 +105,9 @@ else:
     if not model_docks:
         raise RuntimeError("The SolidFreeCAD model manager is not visible on the left")
 
+    for tree in model_docks[0].findChildren(QtWidgets.QTreeView):
+        tree.expandToDepth(2)
+
     active_document = App.activeDocument()
     if active_document is None:
         raise RuntimeError("The workshop preview document is not active")
@@ -164,13 +167,25 @@ else:
         names = [dock.objectName() or dock.windowTitle() for dock in visible_bottom_docks]
         raise RuntimeError(f"Bottom utility docks should be hidden: {names}")
 
+    gui_document = FreeCADGui.getDocument(active_document.Name)
+    active_view = gui_document.activeView()
+    active_view.viewAxonometric()
+    active_view.fitAll()
+    active_view.redraw()
+    application.processEvents()
+    time.sleep(0.15)
+    application.processEvents()
+
     screenshot_path = Path(
         os.environ.get("SOLIDFREECAD_SCREENSHOT", "solidfreecad-bootstrap.png")
     ).resolve()
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
-    application.processEvents()
-    if not main_window.grab().save(str(screenshot_path)):
-        raise RuntimeError(f"Could not save screenshot to {screenshot_path}")
+    screen = application.primaryScreen()
+    if screen is None:
+        raise RuntimeError("No Qt screen is available for the GUI screenshot")
+    screenshot = screen.grabWindow(int(main_window.winId()))
+    if screenshot.isNull() or not screenshot.save(str(screenshot_path)):
+        raise RuntimeError(f"Could not save composited screenshot to {screenshot_path}")
 
     print(f"SOLIDFREECAD_GUI_SMOKE_OK screenshot={screenshot_path}")
     QtCore.QTimer.singleShot(0, application.quit)
