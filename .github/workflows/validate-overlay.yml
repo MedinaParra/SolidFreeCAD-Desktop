@@ -18,7 +18,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check Python scripts
-        run: python3 -m py_compile scripts/apply-overlay.py
+        run: |
+          python3 -m py_compile scripts/apply-overlay.py
+          python3 -m py_compile scripts/verify-command-catalog.py
 
       - name: Fetch official FreeCAD 1.1.1 source
         run: |
@@ -34,7 +36,11 @@ jobs:
           grep -q "Gui::CommandManager& commandManager" build/freecad-source/src/Gui/Application.h
           grep -q "Command\* getCommandByName" build/freecad-source/src/Gui/Command.h
           grep -q "void runCommandByName" build/freecad-source/src/Gui/Command.h
+          grep -q "void Command::addTo(QWidget\*" build/freecad-source/src/Gui/Command.cpp
           grep -q "MainWindow::~MainWindow" build/freecad-source/src/Gui/MainWindow.cpp
+
+      - name: Validate SolidFreeCAD command catalogue
+        run: python3 scripts/verify-command-catalog.py build/freecad-source
 
       - name: Apply SolidFreeCAD GUI overlay
         run: python3 scripts/apply-overlay.py build/freecad-source
@@ -47,6 +53,7 @@ jobs:
           grep -q '#include "SolidFreeCAD/SolidGuiBootstrap.h"' build/freecad-source/src/Gui/MainWindow.cpp
           grep -q "SolidFreeCAD::installGui(this);" build/freecad-source/src/Gui/MainWindow.cpp
           grep -q "SolidFreeCAD::uninstallGui();" build/freecad-source/src/Gui/MainWindow.cpp
+          grep -q 'command->addTo(ribbon_)' build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiManager.cpp
 
       - name: Verify overlay is idempotent
         run: |
