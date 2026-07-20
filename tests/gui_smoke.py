@@ -5,6 +5,7 @@ import sys
 import time
 from pathlib import Path
 
+import FreeCAD as App
 import FreeCADGui
 from PySide import QtCore, QtWidgets
 
@@ -39,17 +40,29 @@ if not expect_classic:
         from workshop_model import create_workshop_part
 
         model = create_workshop_part("WorkshopGuiPreview")
-        gui_document = FreeCADGui.activeDocument()
+        App.setActiveDocument(model.document.Name)
+        model.body.Tip = model.pad
+        model.sketch.Visibility = False
+        model.pad.Visibility = True
+        model.body.Visibility = True
+        model.pad.ViewObject.ShapeColor = (0.72, 0.78, 0.86)
+        model.pad.ViewObject.LineColor = (0.12, 0.14, 0.16)
+        model.document.recompute()
+
+        gui_document = FreeCADGui.getDocument(model.document.Name)
         if gui_document is None:
-            raise RuntimeError("The workshop preview has no active GUI document")
-        gui_document.activeView().viewAxonometric()
-        gui_document.activeView().fitAll()
-    except Exception as exc:  # preserve the screenshot even if module loading regresses
+            raise RuntimeError("The workshop preview has no GUI document")
+        application.processEvents()
+        active_view = gui_document.activeView()
+        active_view.viewAxonometric()
+        active_view.fitAll()
+        active_view.redraw()
+    except Exception as exc:  # preserve diagnostics if module loading regresses
         module_error = exc
 
 # Allow native command registration, deferred layout restoration and
 # SolidFreeCAD chrome enforcement timers to finish before validation.
-deadline = time.monotonic() + 1.5
+deadline = time.monotonic() + 1.75
 while time.monotonic() < deadline:
     application.processEvents()
     time.sleep(0.01)
@@ -79,17 +92,27 @@ else:
         raise RuntimeError("SolidFreeCADRibbonTabs was not installed")
     if ribbon_tabs.count() < 8:
         raise RuntimeError(f"Expected at least 8 ribbon tabs, found {ribbon_tabs.count()}")
-
-    screenshot_path = Path(
-        os.environ.get("SOLIDFREECAD_SCREENSHOT", "solidfreecad-bootstrap.png")
-    ).resolve()
-    screenshot_path.parent.mkdir(parents=True, exist_ok=True)
-    application.processEvents()
-    if not main_window.grab().save(str(screenshot_path)):
-        raise RuntimeError(f"Could not save screenshot to {screenshot_path}")
-
     if module_error is not None:
         raise RuntimeError(f"Mechanical modules could not be initialized: {module_error}")
+
+    model_docks = [
+        dock
+        for dock in main_window.findChildren(QtWidgets.QDockWidget)
+        if dock.isVisible()
+        and main_window.dockWidgetArea(dock) == QtCore.Qt.LeftDockWidgetArea
+        and (dock.objectName() == "Model" or dock.windowTitle() == "Modelo")
+    ]
+    if not model_docks:
+        raise RuntimeError("The SolidFreeCAD model manager is not visible on the left")
+
+    active_document = App.activeDocument()
+    if active_document is None:
+        raise RuntimeError("The workshop preview document is not active")
+    pad = active_document.getObject("Pad")
+    if pad is None or pad.Shape.isNull() or not pad.Shape.isValid():
+        raise RuntimeError("The workshop Pad is not a valid visible solid")
+    if not pad.ViewObject.Visibility:
+        raise RuntimeError("The workshop Pad view provider is hidden")
 
     command_toolbars = [ribbon, *ribbon.findChildren(QtWidgets.QToolBar)]
     command_names: set[str] = set()
@@ -140,6 +163,14 @@ else:
     if visible_bottom_docks:
         names = [dock.objectName() or dock.windowTitle() for dock in visible_bottom_docks]
         raise RuntimeError(f"Bottom utility docks should be hidden: {names}")
+
+    screenshot_path = Path(
+        os.environ.get("SOLIDFREECAD_SCREENSHOT", "solidfreecad-bootstrap.png")
+    ).resolve()
+    screenshot_path.parent.mkdir(parents=True, exist_ok=True)
+    application.processEvents()
+    if not main_window.grab().save(str(screenshot_path)):
+        raise RuntimeError(f"Could not save screenshot to {screenshot_path}")
 
     print(f"SOLIDFREECAD_GUI_SMOKE_OK screenshot={screenshot_path}")
     QtCore.QTimer.singleShot(0, application.quit)
