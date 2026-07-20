@@ -25,8 +25,8 @@ SolidRibbonWidget::SolidRibbonWidget(QWidget* parent)
 {
     setObjectName(QStringLiteral("SolidFreeCADRibbonShell"));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setMinimumHeight(144);
-    setMaximumHeight(144);
+    setMinimumHeight(137);
+    setMaximumHeight(137);
 
     auto* rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
@@ -36,8 +36,8 @@ SolidRibbonWidget::SolidRibbonWidget(QWidget* parent)
 
     pages_ = new QStackedWidget(this);
     pages_->setObjectName(QStringLiteral("SolidFreeCADRibbonPages"));
-    pages_->setMinimumHeight(85);
-    pages_->setMaximumHeight(85);
+    pages_->setMinimumHeight(78);
+    pages_->setMaximumHeight(78);
     rootLayout->addWidget(pages_);
 
     tabs_ = new QTabBar(this);
@@ -54,28 +54,29 @@ SolidRibbonWidget::SolidRibbonWidget(QWidget* parent)
 
     setStyleSheet(QStringLiteral(R"QSS(
         QWidget#SolidFreeCADRibbonShell {
-            background: #f4f4f4;
+            background: #f6f6f6;
             border: 0;
-            border-bottom: 1px solid #a9a9a9;
+            border-bottom: 1px solid #b8b8b8;
+            color: #202020;
         }
         QWidget#SolidFreeCADQuickRow {
             background: #fafafa;
-            border-bottom: 1px solid #c9c9c9;
+            border-bottom: 1px solid #d2d2d2;
         }
         QLabel#SolidFreeCADBrand {
-            color: #1f648f;
-            font-size: 14px;
+            color: #17679c;
+            font-size: 15px;
             font-weight: 700;
             padding: 0 10px 0 12px;
         }
         QLabel#SolidFreeCADDocumentTitle {
-            color: #202020;
-            font-size: 11px;
+            color: #252525;
+            font-size: 12px;
             padding: 0 8px;
         }
         QLabel#SolidFreeCADStatusLight {
-            color: #2d9442;
-            font-size: 15px;
+            color: #2f9b45;
+            font-size: 16px;
             padding: 0 5px;
         }
         QToolBar#SolidFreeCADQuickAccess {
@@ -91,90 +92,88 @@ SolidRibbonWidget::SolidRibbonWidget(QWidget* parent)
             padding: 2px;
         }
         QToolBar#SolidFreeCADQuickAccess QToolButton:hover {
-            background: #e5f0f8;
-            border-color: #78a9ca;
-        }
-        QToolBar#SolidFreeCADQuickAccess QToolButton:pressed,
-        QToolBar#SolidFreeCADQuickAccess QToolButton:checked {
-            background: #d7e9f5;
-            border-color: #4d91bd;
+            background: #e7f0f7;
+            border-color: #8eb3cf;
         }
         QLineEdit#SolidFreeCADCommandSearch {
             background: #ffffff;
             color: #202020;
-            border: 1px solid #b4b4b4;
+            border: 1px solid #b8b8b8;
             border-radius: 1px;
-            min-height: 21px;
+            min-height: 22px;
             padding: 2px 8px;
             margin: 3px 8px;
+            selection-background-color: #cfe5f6;
+            selection-color: #202020;
         }
         QLineEdit#SolidFreeCADCommandSearch:focus {
-            border-color: #4b91bd;
+            border-color: #5798c3;
         }
         QStackedWidget#SolidFreeCADRibbonPages,
         QScrollArea#SolidFreeCADRibbonPage,
         QWidget#SolidFreeCADRibbonPageViewport {
-            background: #f5f5f5;
+            background: #f7f7f7;
             border: 0;
         }
         QWidget#SolidFreeCADCommandGroup {
             background: transparent;
-            border-right: 1px solid #bdbdbd;
+            border-right: 1px solid #cdcdcd;
         }
         QToolBar#SolidFreeCADCommandStrip {
             background: transparent;
             border: 0;
             spacing: 1px;
-            padding: 1px 3px;
+            padding: 1px 4px;
         }
         QToolBar#SolidFreeCADCommandStrip QToolButton {
             background: transparent;
             color: #202020;
             border: 1px solid transparent;
             border-radius: 1px;
-            min-width: 62px;
+            min-width: 48px;
             padding: 3px 4px 1px 4px;
-            font-size: 9px;
+            font-size: 10px;
         }
         QToolBar#SolidFreeCADCommandStrip QToolButton:hover {
-            background: #ffffff;
-            border-color: #8aaec5;
+            background: #e7f0f7;
+            border-color: #8fb4cf;
         }
         QToolBar#SolidFreeCADCommandStrip QToolButton:pressed,
         QToolBar#SolidFreeCADCommandStrip QToolButton:checked {
-            background: #dcecf7;
-            border-color: #4c91bd;
+            background: #d8e9f5;
+            border-color: #609bc1;
         }
         QToolBar#SolidFreeCADCommandStrip QToolButton:disabled {
-            color: #9b9b9b;
+            color: #a8a8a8;
+            background: transparent;
         }
         QLabel#SolidFreeCADGroupTitle {
-            color: #4d4d4d;
-            font-size: 8px;
-            padding: 0 5px 1px 5px;
+            color: #525252;
+            font-size: 9px;
+            padding: 0 5px 2px 5px;
         }
         QTabBar#SolidFreeCADRibbonTabs {
-            background: #e8e8e8;
-            border-top: 1px solid #bdbdbd;
+            background: #eeeeee;
+            border-top: 1px solid #c8c8c8;
         }
         QTabBar#SolidFreeCADRibbonTabs::tab {
-            background: #e8e8e8;
-            color: #202020;
+            background: #eeeeee;
+            color: #242424;
             border: 1px solid transparent;
-            border-right-color: #bdbdbd;
+            border-right-color: #c9c9c9;
             min-height: 22px;
             padding: 1px 10px;
             font-size: 10px;
         }
         QTabBar#SolidFreeCADRibbonTabs::tab:selected {
             background: #ffffff;
-            border-color: #a9a9a9;
-            border-top: 2px solid #4b91bd;
+            border-color: #b6b6b6;
+            border-top: 2px solid #3e88b8;
             border-bottom-color: #ffffff;
             font-weight: 600;
         }
         QTabBar#SolidFreeCADRibbonTabs::tab:hover:!selected {
-            background: #f7f7f7;
+            background: #f8f8f8;
         }
     )QSS"));
 
@@ -306,7 +305,7 @@ void SolidRibbonWidget::addRibbonPages()
     addPage(tr("Croquis"), createRibbonPage({
         {"Croquis", {
             {"Sketcher_LeaveSketch", "Salir del croquis"},
-            {"Sketcher_Dimension", "Cota inteligente"},
+            {"Sketcher_CompDimensionTools", "Cota inteligente"},
         }},
         {"Geometría", {
             {"Sketcher_CompLine", "Línea"},
@@ -460,7 +459,7 @@ QWidget* SolidRibbonWidget::createRibbonPage(std::initializer_list<CommandGroup>
     auto* viewport = new QWidget(scroll);
     viewport->setObjectName(QStringLiteral("SolidFreeCADRibbonPageViewport"));
     auto* layout = new QHBoxLayout(viewport);
-    layout->setContentsMargins(3, 2, 3, 1);
+    layout->setContentsMargins(4, 2, 4, 1);
     layout->setSpacing(0);
 
     for (const CommandGroup& group : groups) {
@@ -484,10 +483,10 @@ QWidget* SolidRibbonWidget::createCommandGroup(const CommandGroup& group)
     toolbar->setObjectName(QStringLiteral("SolidFreeCADCommandStrip"));
     toolbar->setMovable(false);
     toolbar->setFloatable(false);
-    toolbar->setIconSize(QSize(28, 28));
+    toolbar->setIconSize(QSize(27, 27));
     toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    toolbar->setMinimumHeight(64);
-    toolbar->setMaximumHeight(64);
+    toolbar->setMinimumHeight(57);
+    toolbar->setMaximumHeight(57);
 
     for (const CommandItem& item : group.commands) {
         addCommand(toolbar, item);
