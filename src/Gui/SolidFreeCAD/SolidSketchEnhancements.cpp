@@ -2,11 +2,12 @@
 
 #include <QAction>
 #include <QMenu>
-#include <QSet>
 #include <QStyle>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+
+#include <string>
 
 #include <App/Application.h>
 #include <Gui/Application.h>
@@ -196,6 +197,23 @@ void SolidSketchEnhancements::configureSmartDimension(QToolBar* toolbar)
         addMenuCommand(menu, "Sketcher_ConstrainAngle", "Ángulo");
         addMenuCommand(menu, "Sketcher_ConstrainLock", "Fijar posición");
 
+        connect(menu, &QMenu::aboutToShow, menu, [menu]() {
+            if (!Gui::Application::Instance) {
+                return;
+            }
+            auto& manager = Gui::Application::Instance->commandManager();
+            for (QAction* proxy : menu->actions()) {
+                const QString commandName =
+                    proxy->property("SolidFreeCADCommandName").toString();
+                if (commandName.isEmpty()) {
+                    continue;
+                }
+                Gui::Command* command =
+                    manager.getCommandByName(commandName.toLatin1().constData());
+                proxy->setEnabled(command && command->isActive());
+            }
+        });
+
         button->setMenu(menu);
         button->setPopupMode(QToolButton::MenuButtonPopup);
         button->setProperty("SolidFreeCADSmartDimensionConfigured", true);
@@ -250,20 +268,19 @@ bool SolidSketchEnhancements::addMenuCommand(QMenu* menu,
         return false;
     }
 
-    QSet<QAction*> previous;
-    for (QAction* action : menu->actions()) {
-        previous.insert(action);
-    }
+    QAction* proxy = menu->addAction(QString::fromUtf8(fallbackText));
+    proxy->setProperty("SolidFreeCADCommandName", QString::fromLatin1(commandName));
+    proxy->setToolTip(QString::fromUtf8(command->getToolTipText()));
+    proxy->setEnabled(command->isActive());
 
-    command->addTo(menu);
-    for (QAction* action : menu->actions()) {
-        if (!previous.contains(action)) {
-            action->setText(QString::fromUtf8(fallbackText));
-            action->setProperty(
-                "SolidFreeCADCommandName", QString::fromLatin1(commandName)
+    const std::string stableCommandName(commandName);
+    connect(proxy, &QAction::triggered, menu, [stableCommandName]() {
+        if (Gui::Application::Instance) {
+            Gui::Application::Instance->commandManager().runCommandByName(
+                stableCommandName.c_str()
             );
         }
-    }
+    });
     return true;
 }
 
