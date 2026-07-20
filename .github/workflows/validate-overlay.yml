@@ -1,0 +1,56 @@
+name: Validate FreeCAD 1.1.1 overlay
+
+on:
+  push:
+    branches:
+      - main
+      - "agent/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-overlay:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Check Python scripts
+        run: python3 -m py_compile scripts/apply-overlay.py
+
+      - name: Fetch official FreeCAD 1.1.1 source
+        run: |
+          git clone \
+            --branch 1.1.1 \
+            --depth 1 \
+            https://github.com/FreeCAD/FreeCAD.git \
+            build/freecad-source
+          test "$(git -C build/freecad-source describe --tags --exact-match)" = "1.1.1"
+
+      - name: Validate required official GUI APIs
+        run: |
+          grep -q "Gui::CommandManager& commandManager" build/freecad-source/src/Gui/Application.h
+          grep -q "Command\* getCommandByName" build/freecad-source/src/Gui/Command.h
+          grep -q "void runCommandByName" build/freecad-source/src/Gui/Command.h
+          grep -q "MainWindow::~MainWindow" build/freecad-source/src/Gui/MainWindow.cpp
+
+      - name: Apply SolidFreeCAD GUI overlay
+        run: python3 scripts/apply-overlay.py build/freecad-source
+
+      - name: Verify integration markers
+        run: |
+          test -f build/freecad-source/SOLIDFREECAD_OVERLAY_APPLIED
+          test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiManager.cpp
+          grep -q "add_subdirectory(SolidFreeCAD)" build/freecad-source/src/Gui/CMakeLists.txt
+          grep -q '#include "SolidFreeCAD/SolidGuiBootstrap.h"' build/freecad-source/src/Gui/MainWindow.cpp
+          grep -q "SolidFreeCAD::installGui(this);" build/freecad-source/src/Gui/MainWindow.cpp
+          grep -q "SolidFreeCAD::uninstallGui();" build/freecad-source/src/Gui/MainWindow.cpp
+
+      - name: Verify overlay is idempotent
+        run: |
+          python3 scripts/apply-overlay.py build/freecad-source
+          test "$(grep -c 'add_subdirectory(SolidFreeCAD)' build/freecad-source/src/Gui/CMakeLists.txt)" = "1"
+          test "$(grep -c 'SolidFreeCAD::installGui(this);' build/freecad-source/src/Gui/MainWindow.cpp)" = "1"
+          test "$(grep -c 'SolidFreeCAD::uninstallGui();' build/freecad-source/src/Gui/MainWindow.cpp)" = "1"
