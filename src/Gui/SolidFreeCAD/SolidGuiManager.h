@@ -7,6 +7,8 @@
 
 #include <boost/signals2/connection.hpp>
 
+class QDockWidget;
+class QEvent;
 class QMenuBar;
 class QToolBar;
 
@@ -30,8 +32,13 @@ public:
     void uninstall();
     bool isInstalled() const;
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
+    void enforceSolidChrome();
     void hideClassicChrome();
+    void hideBottomUtilityDocks();
     void restoreClassicChrome();
     void rebuildRibbon();
 
@@ -40,6 +47,7 @@ private:
     SolidRibbonWidget* ribbonShell_ = nullptr;
     QPointer<QMenuBar> hiddenMenuBar_;
     QList<QPointer<QToolBar>> hiddenToolbars_;
+    QList<QPointer<QDockWidget>> hiddenDocks_;
     boost::signals2::scoped_connection commandChangedConnection_;
 };
 
