@@ -217,6 +217,15 @@ else:
     ).resolve()
     capture_window(sketch_screenshot)
 
+    # Always leave edit mode while the complete Qt/Sketcher object graph still exists.
+    # Closing the application with a sketch in edit mode can destroy the event filter
+    # after its target widgets in a partial build-tree runtime.
+    gui_document.resetEdit()
+    model.sketch.Visibility = False
+    model.pad.Visibility = True
+    active_document.recompute()
+    process_for(0.25)
+
     print(
         "SOLIDFREECAD_GUI_SMOKE_OK "
         f"modeling={modeling_screenshot} sketch={sketch_screenshot}"
