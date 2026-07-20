@@ -113,6 +113,18 @@ jobs:
           grep -q "SOLIDFREECAD_GUI_SMOKE_OK" build/logs/gui-smoke.log
           test -f "${SCREENSHOT_PATH}"
 
+      - name: Run Classic recovery smoke test
+        env:
+          SOLIDFREECAD_CLASSIC_MODE: "1"
+          SOLIDFREECAD_EXPECT_CLASSIC: "1"
+        run: |
+          set -o pipefail
+          xvfb-run -a timeout 90s \
+            "${BUILD_DIR}/bin/FreeCAD" \
+            "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
+            2>&1 | tee build/logs/classic-smoke.log
+          grep -q "SOLIDFREECAD_CLASSIC_SMOKE_OK" build/logs/classic-smoke.log
+
       - name: Print compiler cache statistics
         if: always()
         run: ccache --show-stats || true
