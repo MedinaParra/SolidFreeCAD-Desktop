@@ -28,11 +28,28 @@ if application is None:
     raise RuntimeError("Qt application is not available")
 application.processEvents()
 
+
+def process_for(seconds: float) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        application.processEvents()
+        time.sleep(0.01)
+
+
+def capture_window(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    application.processEvents()
+    screen = application.primaryScreen()
+    if screen is None:
+        raise RuntimeError("No Qt screen is available for the GUI screenshot")
+    screenshot = screen.grabWindow(int(main_window.winId()))
+    if screenshot.isNull() or not screenshot.save(str(path)):
+        raise RuntimeError(f"Could not save composited screenshot to {path}")
+
+
 module_error: Exception | None = None
+model = None
 if not expect_classic:
-    # Build-tree executions do not install the Python InitGui.py workbench registry.
-    # Import the compiled modules directly: this registers the same native commands
-    # without depending on the legacy workbench selector.
     try:
         import PartDesignGui  # noqa: F401
         import SketcherGui  # noqa: F401
@@ -57,15 +74,10 @@ if not expect_classic:
         active_view.viewAxonometric()
         active_view.fitAll()
         active_view.redraw()
-    except Exception as exc:  # preserve diagnostics if module loading regresses
+    except Exception as exc:
         module_error = exc
 
-# Allow native command registration, deferred layout restoration and
-# SolidFreeCAD chrome enforcement timers to finish before validation.
-deadline = time.monotonic() + 1.75
-while time.monotonic() < deadline:
-    application.processEvents()
-    time.sleep(0.01)
+process_for(1.75)
 
 ribbon = main_window.findChild(QtWidgets.QToolBar, "SolidFreeCADRibbon")
 command_search = main_window.findChild(QtWidgets.QLineEdit, "SolidFreeCADCommandSearch")
@@ -82,17 +94,13 @@ if expect_classic:
     print("SOLIDFREECAD_CLASSIC_SMOKE_OK")
     QtCore.QTimer.singleShot(0, application.quit)
 else:
-    if ribbon is None:
-        raise RuntimeError("SolidFreeCADRibbon was not installed")
-    if not ribbon.isVisible():
+    if ribbon is None or not ribbon.isVisible():
         raise RuntimeError("SolidFreeCADRibbon is not visible")
     if command_search is None:
         raise RuntimeError("SolidFreeCADCommandSearch was not installed")
-    if ribbon_tabs is None:
-        raise RuntimeError("SolidFreeCADRibbonTabs was not installed")
-    if ribbon_tabs.count() < 8:
-        raise RuntimeError(f"Expected at least 8 ribbon tabs, found {ribbon_tabs.count()}")
-    if module_error is not None:
+    if ribbon_tabs is None or ribbon_tabs.count() < 8:
+        raise RuntimeError("The tabbed SolidFreeCAD ribbon is incomplete")
+    if module_error is not None or model is None:
         raise RuntimeError(f"Mechanical modules could not be initialized: {module_error}")
 
     model_docks = [
@@ -113,7 +121,7 @@ else:
         raise RuntimeError("The workshop preview document is not active")
     pad = active_document.getObject("Pad")
     if pad is None or pad.Shape.isNull() or not pad.Shape.isValid():
-        raise RuntimeError("The workshop Pad is not a valid visible solid")
+        raise RuntimeError("The workshop Pad is not a valid solid")
     if not pad.ViewObject.Visibility:
         raise RuntimeError("The workshop Pad view provider is hidden")
 
@@ -139,18 +147,26 @@ else:
         "PartDesign_Pocket",
         "PartDesign_Fillet",
         "PartDesign_Chamfer",
+        "Sketcher_LeaveSketch",
+        "Sketcher_Dimension",
+        "Sketcher_CompLine",
+        "Sketcher_CompCreateRectangles",
+        "Sketcher_CompCreateArc",
+        "Sketcher_CompCurveEdition",
+        "Sketcher_CompExternal",
+        "Sketcher_Offset",
+        "Sketcher_Symmetry",
+        "Sketcher_ValidateSketch",
     }
     missing = required_commands.difference(command_names)
     if missing:
         raise RuntimeError(f"Missing ribbon command entries: {sorted(missing)}")
 
-    if visible_actions < 30:
+    if visible_actions < 40:
         raise RuntimeError(f"Tabbed ribbon has too few visible actions: {visible_actions}")
 
     completer = command_search.completer()
-    if completer is None or completer.model() is None:
-        raise RuntimeError("Command search completer is not available")
-    if completer.model().rowCount() == 0:
+    if completer is None or completer.model() is None or completer.model().rowCount() == 0:
         raise RuntimeError("Command search catalogue is empty")
 
     menu_bar = main_window.menuBar()
@@ -172,20 +188,37 @@ else:
     active_view.viewAxonometric()
     active_view.fitAll()
     active_view.redraw()
-    application.processEvents()
-    time.sleep(0.15)
-    application.processEvents()
+    process_for(0.2)
 
-    screenshot_path = Path(
-        os.environ.get("SOLIDFREECAD_SCREENSHOT", "solidfreecad-bootstrap.png")
+    modeling_screenshot = Path(
+        os.environ.get("SOLIDFREECAD_SCREENSHOT", "solidfreecad-modeling.png")
     ).resolve()
-    screenshot_path.parent.mkdir(parents=True, exist_ok=True)
-    screen = application.primaryScreen()
-    if screen is None:
-        raise RuntimeError("No Qt screen is available for the GUI screenshot")
-    screenshot = screen.grabWindow(int(main_window.winId()))
-    if screenshot.isNull() or not screenshot.save(str(screenshot_path)):
-        raise RuntimeError(f"Could not save composited screenshot to {screenshot_path}")
+    capture_window(modeling_screenshot)
 
-    print(f"SOLIDFREECAD_GUI_SMOKE_OK screenshot={screenshot_path}")
+    sketch_index = next(
+        (index for index in range(ribbon_tabs.count()) if ribbon_tabs.tabText(index) == "Croquis"),
+        -1,
+    )
+    if sketch_index < 0:
+        raise RuntimeError("The Croquis ribbon tab was not found")
+    ribbon_tabs.setCurrentIndex(sketch_index)
+
+    model.pad.Visibility = False
+    model.sketch.Visibility = True
+    active_document.recompute()
+    gui_document.setEdit(model.sketch.Name)
+    active_view.viewTop()
+    active_view.fitAll()
+    active_view.redraw()
+    process_for(0.6)
+
+    sketch_screenshot = Path(
+        os.environ.get("SOLIDFREECAD_SKETCH_SCREENSHOT", "solidfreecad-sketch.png")
+    ).resolve()
+    capture_window(sketch_screenshot)
+
+    print(
+        "SOLIDFREECAD_GUI_SMOKE_OK "
+        f"modeling={modeling_screenshot} sketch={sketch_screenshot}"
+    )
     QtCore.QTimer.singleShot(0, application.quit)
