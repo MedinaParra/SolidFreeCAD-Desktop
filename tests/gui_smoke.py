@@ -128,12 +128,15 @@ else:
     command_toolbars = [ribbon, *ribbon.findChildren(QtWidgets.QToolBar)]
     command_names: set[str] = set()
     visible_actions = 0
+    smart_dimension_button = None
 
     for toolbar in command_toolbars:
         for action in toolbar.actions():
             command_name = action.property("SolidFreeCADCommandName")
             if command_name:
                 command_names.add(str(command_name))
+            if str(command_name) == "Sketcher_Dimension":
+                smart_dimension_button = toolbar.widgetForAction(action)
             if not action.isSeparator() and action.isVisible():
                 visible_actions += 1
 
@@ -164,6 +167,50 @@ else:
 
     if visible_actions < 40:
         raise RuntimeError(f"Tabbed ribbon has too few visible actions: {visible_actions}")
+
+    if not isinstance(smart_dimension_button, QtWidgets.QToolButton):
+        raise RuntimeError("Cota inteligente is not represented by a tool button")
+    if smart_dimension_button.menu() is None:
+        raise RuntimeError("Cota inteligente does not expose its unified dimension menu")
+    if smart_dimension_button.popupMode() != QtWidgets.QToolButton.MenuButtonPopup:
+        raise RuntimeError("Cota inteligente is not using a split menu button")
+
+    dimension_menu_names = {
+        str(action.property("SolidFreeCADCommandName"))
+        for action in smart_dimension_button.menu().actions()
+        if action.property("SolidFreeCADCommandName")
+    }
+    expected_dimension_commands = {
+        "Sketcher_Dimension",
+        "Sketcher_ConstrainDistanceX",
+        "Sketcher_ConstrainDistanceY",
+        "Sketcher_ConstrainDistance",
+        "Sketcher_ConstrainRadius",
+        "Sketcher_ConstrainDiameter",
+        "Sketcher_ConstrainAngle",
+        "Sketcher_ConstrainLock",
+    }
+    missing_dimensions = expected_dimension_commands.difference(dimension_menu_names)
+    if missing_dimensions:
+        raise RuntimeError(
+            f"Cota inteligente is missing dimension variants: {sorted(missing_dimensions)}"
+        )
+
+    view_parameters = App.ParamGet("User parameter:BaseApp/Preferences/View")
+    if view_parameters.GetUnsigned("FullyConstrainedColor", 0) != 0x000000FF:
+        raise RuntimeError("Fully constrained sketch status color is not black")
+    if view_parameters.GetUnsigned("FullyConstraintElementColor", 0) != 0x000000FF:
+        raise RuntimeError("Fully constrained sketch geometry is not black")
+
+    sketch_parameters = App.ParamGet(
+        "User parameter:BaseApp/Preferences/Mod/Sketcher/General"
+    )
+    sketch_face_color = sketch_parameters.GetUnsigned("SketchFaceColor", 0)
+    sketch_face_alpha = sketch_face_color & 0xFF
+    if not 40 <= sketch_face_alpha <= 160:
+        raise RuntimeError(
+            f"Closed sketch contour alpha is not translucent: {sketch_face_alpha}"
+        )
 
     completer = command_search.completer()
     if completer is None or completer.model() is None or completer.model().rowCount() == 0:
@@ -210,16 +257,13 @@ else:
     active_view.viewTop()
     active_view.fitAll()
     active_view.redraw()
-    process_for(0.6)
+    process_for(0.8)
 
     sketch_screenshot = Path(
         os.environ.get("SOLIDFREECAD_SKETCH_SCREENSHOT", "solidfreecad-sketch.png")
     ).resolve()
     capture_window(sketch_screenshot)
 
-    # Always leave edit mode while the complete Qt/Sketcher object graph still exists.
-    # Closing the application with a sketch in edit mode can destroy the event filter
-    # after its target widgets in a partial build-tree runtime.
     gui_document.resetEdit()
     model.sketch.Visibility = False
     model.pad.Visibility = True
