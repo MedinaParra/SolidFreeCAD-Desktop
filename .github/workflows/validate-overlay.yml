@@ -20,6 +20,7 @@ jobs:
       - name: Check Python scripts
         run: |
           python3 -m py_compile scripts/apply-overlay.py
+          python3 -m py_compile scripts/patch-freecad-ubuntu22.py
           python3 -m py_compile scripts/verify-command-catalog.py
           python3 -m py_compile tests/test_apply_overlay.py
 
@@ -49,9 +50,13 @@ jobs:
       - name: Apply SolidFreeCAD GUI overlay
         run: python3 scripts/apply-overlay.py build/freecad-source
 
+      - name: Apply Ubuntu 22.04 OCCT compatibility patch
+        run: python3 scripts/patch-freecad-ubuntu22.py build/freecad-source
+
       - name: Verify integration markers
         run: |
           test -f build/freecad-source/SOLIDFREECAD_OVERLAY_APPLIED
+          test -f build/freecad-source/SOLIDFREECAD_UBUNTU22_COMPAT_PATCHED
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiManager.cpp
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidCommandSearch.cpp
@@ -62,10 +67,15 @@ jobs:
           grep -q 'command->addTo(toolbar)' build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           grep -q 'SolidFreeCADRibbonTabs' build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           grep -q 'SOLIDFREECAD_CLASSIC_MODE' build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiBootstrap.cpp
+          grep -q 'Message_ProgressRange.hxx' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp
+          grep -q 'OCC_VERSION_HEX >= 0x070600' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp
 
-      - name: Verify overlay is idempotent
+      - name: Verify patches are idempotent
         run: |
           python3 scripts/apply-overlay.py build/freecad-source
+          python3 scripts/patch-freecad-ubuntu22.py build/freecad-source
           test "$(grep -c 'add_subdirectory(SolidFreeCAD)' build/freecad-source/src/Gui/CMakeLists.txt)" = "1"
           test "$(grep -c 'SolidFreeCAD::installGui(this);' build/freecad-source/src/Gui/MainWindow.cpp)" = "1"
           test "$(grep -c 'SolidFreeCAD::uninstallGui();' build/freecad-source/src/Gui/MainWindow.cpp)" = "1"
+          test "$(grep -c 'Message_ProgressRange.hxx' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp)" = "1"
+          test "$(grep -c 'OCC_VERSION_HEX >= 0x070600' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp)" = "1"
