@@ -6,6 +6,7 @@
 #include <QToolBar>
 
 #include <Gui/Application.h>
+#include <Gui/Command.h>
 #include <Gui/MainWindow.h>
 
 namespace SolidFreeCAD
