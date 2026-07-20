@@ -12,7 +12,7 @@ COMMANDS = (
     "Std_Undo",
     "Std_Redo",
     "Std_ViewFitAll",
-    "Std_ViewAxonometric",
+    "Std_ViewIsometric",
     "PartDesign_Body",
     "PartDesign_NewSketch",
     "PartDesign_Pad",
