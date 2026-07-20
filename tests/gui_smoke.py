@@ -22,10 +22,14 @@ if application is None:
     raise RuntimeError("Qt application is not available")
 application.processEvents()
 
+workbench_error: Exception | None = None
 if not expect_classic:
     # Load the mechanical-design command catalogue so the screenshot represents
     # a realistic modeling session instead of the empty Start workbench.
-    FreeCADGui.activateWorkbench("PartDesignWorkbench")
+    try:
+        FreeCADGui.activateWorkbench("PartDesignWorkbench")
+    except Exception as exc:  # preserve the screenshot even if module loading regresses
+        workbench_error = exc
 
 # Allow FreeCAD's deferred workbench/layout restoration and SolidFreeCAD's
 # chrome enforcement timers to finish before validating or capturing the GUI.
@@ -67,6 +71,9 @@ else:
     application.processEvents()
     if not main_window.grab().save(str(screenshot_path)):
         raise RuntimeError(f"Could not save screenshot to {screenshot_path}")
+
+    if workbench_error is not None:
+        raise RuntimeError(f"Part Design workbench could not be activated: {workbench_error}")
 
     command_toolbars = [ribbon, *ribbon.findChildren(QtWidgets.QToolBar)]
     command_names: set[str] = set()
