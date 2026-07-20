@@ -2,6 +2,7 @@
 
 #include <QList>
 #include <QPointer>
+#include <QString>
 
 #include <QObject>
 
@@ -37,8 +38,10 @@ protected:
 
 private:
     void enforceSolidChrome();
+    void ensureModelManager();
     void hideClassicChrome();
     void hideBottomUtilityDocks();
+    void restoreModelManager();
     void restoreClassicChrome();
     void rebuildRibbon();
 
@@ -48,6 +51,11 @@ private:
     QPointer<QMenuBar> hiddenMenuBar_;
     QList<QPointer<QToolBar>> hiddenToolbars_;
     QList<QPointer<QDockWidget>> hiddenDocks_;
+    QPointer<QDockWidget> modelManagerDock_;
+    QString modelManagerOriginalTitle_;
+    int modelManagerOriginalMinimumWidth_ = 0;
+    bool modelManagerWasVisible_ = false;
+    bool modelManagerAddedBySolid_ = false;
     boost::signals2::scoped_connection commandChangedConnection_;
 };
 
