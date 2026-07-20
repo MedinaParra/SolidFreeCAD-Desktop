@@ -1,6 +1,11 @@
 #pragma once
 
+#include <initializer_list>
+
 #include <QObject>
+#include <QString>
+
+#include <boost/signals2/connection.hpp>
 
 class QToolBar;
 
@@ -23,10 +28,13 @@ public:
     bool isInstalled() const;
 
 private:
+    void rebuildRibbon();
+    void addSection(const QString& title, std::initializer_list<const char*> commandNames);
     bool addCommand(const char* commandName);
 
     Gui::MainWindow* mainWindow_ = nullptr;
     QToolBar* ribbon_ = nullptr;
+    boost::signals2::scoped_connection commandChangedConnection_;
 };
 
 }  // namespace SolidFreeCAD
