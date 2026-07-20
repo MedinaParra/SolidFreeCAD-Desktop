@@ -8,9 +8,11 @@
 #include <QMenuBar>
 #include <QTimer>
 #include <QToolBar>
+#include <QWidget>
 
 #include <Gui/Application.h>
 #include <Gui/Command.h>
+#include <Gui/DockWindowManager.h>
 #include <Gui/MainWindow.h>
 
 namespace SolidFreeCAD
@@ -101,6 +103,7 @@ void SolidGuiManager::uninstall()
         ribbonShell_ = nullptr;
     }
 
+    restoreModelManager();
     restoreClassicChrome();
     mainWindow_ = nullptr;
 }
@@ -138,8 +141,52 @@ void SolidGuiManager::enforceSolidChrome()
 
     hideClassicChrome();
     hideBottomUtilityDocks();
+    ensureModelManager();
     ribbon_->show();
     mainWindow_->addToolBar(Qt::TopToolBarArea, ribbon_);
+}
+
+void SolidGuiManager::ensureModelManager()
+{
+    if (!mainWindow_) {
+        return;
+    }
+
+    auto* dockManager = Gui::DockWindowManager::instance();
+    if (!dockManager) {
+        return;
+    }
+
+    QWidget* modelWidget = dockManager->findRegisteredDockWindow("Std_ComboView");
+    if (!modelWidget) {
+        return;
+    }
+
+    QDockWidget* dock = qobject_cast<QDockWidget*>(modelWidget->parentWidget());
+    if (!modelManagerDock_) {
+        modelManagerOriginalTitle_ = modelWidget->windowTitle();
+        modelManagerOriginalMinimumWidth_ = modelWidget->minimumWidth();
+        modelManagerWasVisible_ = dock && dock->isVisible();
+    }
+
+    if (!dock || mainWindow_->dockWidgetArea(dock) == Qt::NoDockWidgetArea) {
+        const QByteArray dockName = modelWidget->objectName().isEmpty()
+            ? QByteArray("Model")
+            : modelWidget->objectName().toUtf8();
+        dock = dockManager->addDockWindow(dockName.constData(), modelWidget, Qt::LeftDockWidgetArea);
+        if (!dock) {
+            return;
+        }
+        modelManagerAddedBySolid_ = true;
+    }
+
+    modelManagerDock_ = dock;
+    modelWidget->setMinimumWidth(250);
+    dock->setMinimumWidth(260);
+    dock->setWindowTitle(tr("Modelo"));
+    mainWindow_->addDockWidget(Qt::LeftDockWidgetArea, dock);
+    dock->show();
+    modelWidget->show();
 }
 
 void SolidGuiManager::hideClassicChrome()
@@ -203,6 +250,39 @@ void SolidGuiManager::hideBottomUtilityDocks()
         }
         dock->hide();
     }
+}
+
+void SolidGuiManager::restoreModelManager()
+{
+    if (!modelManagerDock_) {
+        return;
+    }
+
+    QWidget* modelWidget = modelManagerDock_->widget();
+    if (modelWidget) {
+        modelWidget->setMinimumWidth(modelManagerOriginalMinimumWidth_);
+        if (!modelManagerOriginalTitle_.isEmpty()) {
+            modelWidget->setWindowTitle(modelManagerOriginalTitle_);
+        }
+    }
+
+    if (modelManagerAddedBySolid_) {
+        if (auto* dockManager = Gui::DockWindowManager::instance()) {
+            QWidget* restoredWidget = dockManager->removeDockWindow("Model");
+            if (restoredWidget) {
+                restoredWidget->hide();
+            }
+        }
+    }
+    else if (!modelManagerWasVisible_) {
+        modelManagerDock_->hide();
+    }
+
+    modelManagerDock_.clear();
+    modelManagerOriginalTitle_.clear();
+    modelManagerOriginalMinimumWidth_ = 0;
+    modelManagerWasVisible_ = false;
+    modelManagerAddedBySolid_ = false;
 }
 
 void SolidGuiManager::restoreClassicChrome()
