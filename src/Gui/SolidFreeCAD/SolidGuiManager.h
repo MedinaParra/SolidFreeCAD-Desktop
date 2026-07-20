@@ -1,9 +1,7 @@
 #pragma once
 
 #include <QObject>
-#include <QString>
 
-class QAction;
 class QToolBar;
 
 namespace Gui
@@ -25,7 +23,7 @@ public:
     bool isInstalled() const;
 
 private:
-    QAction* addCommandAction(const QString& label, const char* commandName);
+    bool addCommand(const char* commandName);
 
     Gui::MainWindow* mainWindow_ = nullptr;
     QToolBar* ribbon_ = nullptr;
