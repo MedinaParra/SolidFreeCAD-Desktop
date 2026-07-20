@@ -90,7 +90,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build "${BUILD_DIR}" \
-            --target Materials MaterialScripts MaterialToolsLib MaterialLib MaterialModelLib AppearanceLib Stylesheets_data \
+            --target Materials MaterialScripts MaterialToolsLib MaterialLib MaterialModelLib AppearanceLib Stylesheets_data PartScripts Show \
             --parallel 2 \
             2>&1 | tee build/logs/build-runtime-resources.log
           find "${BUILD_DIR}" \
@@ -99,6 +99,8 @@ jobs:
           find "${BUILD_DIR}" \
             -path '*/Gui/Stylesheets/overlay/icons/mode.svg' \
             -print -quit | grep -q .
+          test -f "${BUILD_DIR}/Mod/Part/AttachmentEditor/__init__.py"
+          test -f "${BUILD_DIR}/Mod/Show/__init__.py"
 
       - name: Build FreeCADGui
         run: |
@@ -140,6 +142,8 @@ jobs:
           find "${BUILD_DIR}/Mod/PartDesign" -maxdepth 1 -name 'PartDesignGui*' -print -quit | grep -q .
           find "${BUILD_DIR}" -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' -print -quit | grep -q .
           find "${BUILD_DIR}" -path '*/Gui/Stylesheets/overlay/icons/mode.svg' -print -quit | grep -q .
+          test -f "${BUILD_DIR}/Mod/Part/AttachmentEditor/__init__.py"
+          test -f "${BUILD_DIR}/Mod/Show/__init__.py"
 
       - name: Run workshop Part Sketch Pad persistence test
         env:
