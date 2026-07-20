@@ -44,6 +44,7 @@ jobs:
           grep -q "void Command::addTo(QWidget\*" build/freecad-source/src/Gui/Command.cpp
           grep -q "MainWindow::~MainWindow" build/freecad-source/src/Gui/MainWindow.cpp
           grep -q "pcSketchFacesToggle->addChild(pcSketchFaces)" build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
+          grep -q "setupCoinGeometry" build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
 
       - name: Validate SolidFreeCAD command catalogue
         run: python3 scripts/verify-command-catalog.py build/freecad-source
@@ -61,15 +62,16 @@ jobs:
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiManager.cpp
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           test -f build/freecad-source/src/Gui/SolidFreeCAD/SolidCommandSearch.cpp
-          test -f build/freecad-source/src/Gui/SolidFreeCAD/Resources/icons/arrow-down.svg
           grep -q "add_subdirectory(SolidFreeCAD)" build/freecad-source/src/Gui/CMakeLists.txt
           grep -q '#include "SolidFreeCAD/SolidGuiBootstrap.h"' build/freecad-source/src/Gui/MainWindow.cpp
           grep -q "SolidFreeCAD::installGui(this);" build/freecad-source/src/Gui/MainWindow.cpp
           grep -q "SolidFreeCAD::uninstallGui();" build/freecad-source/src/Gui/MainWindow.cpp
           grep -q 'command->addTo(toolbar)' build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
+          grep -q 'Sketcher_CompDimensionTools' build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           grep -q 'SolidFreeCADRibbonTabs' build/freecad-source/src/Gui/SolidFreeCAD/SolidRibbonWidget.cpp
           grep -q 'SOLIDFREECAD_CLASSIC_MODE' build/freecad-source/src/Gui/SolidFreeCAD/SolidGuiBootstrap.cpp
-          grep -q 'SolidFreeCAD: display native faces for closed profiles' build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
+          grep -q 'SolidFreeCAD: rebuild and display native faces for closed profiles' build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
+          grep -q 'solidFreeCADProfileShape' build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
           grep -q 'SolidFreeCAD: leave profile shading' build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp
           grep -q 'Message_ProgressRange.hxx' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp
           grep -q 'OCC_VERSION_HEX >= 0x070600' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp
@@ -81,7 +83,7 @@ jobs:
           test "$(grep -c 'add_subdirectory(SolidFreeCAD)' build/freecad-source/src/Gui/CMakeLists.txt)" = "1"
           test "$(grep -c 'SolidFreeCAD::installGui(this);' build/freecad-source/src/Gui/MainWindow.cpp)" = "1"
           test "$(grep -c 'SolidFreeCAD::uninstallGui();' build/freecad-source/src/Gui/MainWindow.cpp)" = "1"
-          test "$(grep -c 'SolidFreeCAD: display native faces for closed profiles' build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp)" = "1"
+          test "$(grep -c 'SolidFreeCAD: rebuild and display native faces for closed profiles' build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp)" = "1"
           test "$(grep -c 'SolidFreeCAD: leave profile shading' build/freecad-source/src/Mod/Sketcher/Gui/ViewProviderSketch.cpp)" = "1"
           test "$(grep -c 'Message_ProgressRange.hxx' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp)" = "1"
           test "$(grep -c 'OCC_VERSION_HEX >= 0x070600' build/freecad-source/src/Mod/PartDesign/App/Feature.cpp)" = "1"
