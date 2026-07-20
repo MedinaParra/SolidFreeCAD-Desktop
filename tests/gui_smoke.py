@@ -148,7 +148,7 @@ else:
             command_name = action.property("SolidFreeCADCommandName")
             if command_name:
                 command_names.add(str(command_name))
-            if str(command_name) == "Sketcher_Dimension":
+            if str(command_name) == "Sketcher_CompDimensionTools":
                 smart_dimension_button = toolbar.widgetForAction(action)
             if not action.isSeparator() and action.isVisible():
                 visible_actions += 1
@@ -164,7 +164,7 @@ else:
         "PartDesign_Fillet",
         "PartDesign_Chamfer",
         "Sketcher_LeaveSketch",
-        "Sketcher_Dimension",
+        "Sketcher_CompDimensionTools",
         "Sketcher_CompLine",
         "Sketcher_CompCreateRectangles",
         "Sketcher_CompCreateArc",
