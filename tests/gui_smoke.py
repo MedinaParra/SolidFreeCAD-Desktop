@@ -52,7 +52,7 @@ else:
         "Std_Undo",
         "Std_Redo",
         "Std_ViewFitAll",
-        "Std_ViewAxonometric",
+        "Std_ViewIsometric",
     }
     missing = required_commands.difference(native_action_names)
     if missing:
