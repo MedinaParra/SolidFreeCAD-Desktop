@@ -1,6 +1,7 @@
 #include "SolidGuiBootstrap.h"
 
 #include "SolidGuiManager.h"
+#include "SolidSketchEnhancements.h"
 
 #include <memory>
 #include <string>
@@ -15,6 +16,7 @@ namespace SolidFreeCAD
 namespace
 {
 std::unique_ptr<SolidGuiManager> guiManager;
+std::unique_ptr<SolidSketchEnhancements> sketchEnhancements;
 
 bool classicModeRequestedByEnvironment()
 {
@@ -46,12 +48,17 @@ void installGui(Gui::MainWindow* mainWindow)
     if (!guiManager) {
         guiManager = std::make_unique<SolidGuiManager>();
     }
+    if (!sketchEnhancements) {
+        sketchEnhancements = std::make_unique<SolidSketchEnhancements>();
+    }
 
     guiManager->install(mainWindow);
+    sketchEnhancements->install(mainWindow);
 }
 
 void uninstallGui()
 {
+    sketchEnhancements.reset();
     guiManager.reset();
 }
 
