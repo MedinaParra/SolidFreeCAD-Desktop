@@ -55,9 +55,6 @@ bool SolidSketchEnhancements::install(Gui::MainWindow* mainWindow)
         QTimer::singleShot(0, this, [this]() { refreshRibbon(); });
     });
 
-    // FreeCAD registers mechanical commands and restores toolbar contents in deferred passes.
-    // These bounded refreshes avoid observing every Qt child/polish event, which can feed back
-    // into ribbon layout and keep the event queue permanently busy.
     refreshRibbon();
     QTimer::singleShot(0, this, [this]() { refreshRibbon(); });
     QTimer::singleShot(250, this, [this]() { refreshRibbon(); });
@@ -110,7 +107,6 @@ void SolidSketchEnhancements::applySketchPalette()
         "FullyConstraintInternalAlignmentColor", rgba(96, 96, 96)
     );
 
-    // FreeCAD's native SoSketchFaces renderer only produces faces for closed sketch wires.
     sketchParameters->SetUnsigned("SketchFaceColor", rgba(151, 158, 188, 92));
 
     paletteApplied_ = true;
@@ -217,7 +213,6 @@ void SolidSketchEnhancements::configureSmartDimension(QToolBar* toolbar)
         button->setMenu(menu);
         button->setPopupMode(QToolButton::MenuButtonPopup);
         button->setProperty("SolidFreeCADSmartDimensionConfigured", true);
-        button->setProperty("SolidFreeCADHasMenu", true);
         button->setToolTip(tr(
             "Acota según la selección. Use la flecha para elegir una cota específica."
         ));
@@ -234,19 +229,14 @@ void SolidSketchEnhancements::configureCompactMenuArrows(QToolBar* ribbon)
 
     ribbon->setStyleSheet(ribbon->styleSheet() + QStringLiteral(R"QSS(
         QToolBar#SolidFreeCADRibbon QToolButton::menu-indicator {
-            image: none;
+            image: url(:/SolidFreeCAD/arrow-down.svg);
             subcontrol-origin: padding;
             subcontrol-position: bottom right;
-            width: 0px;
-            height: 0px;
-            border-left: 3px solid transparent;
-            border-right: 3px solid transparent;
-            border-top: 4px solid #4b4b4b;
+            width: 7px;
+            height: 5px;
+            border: none;
             margin-right: 3px;
             margin-bottom: 2px;
-        }
-        QToolBar#SolidFreeCADRibbon QToolButton:disabled::menu-indicator {
-            border-top-color: #a8a8a8;
         }
     )QSS"));
     ribbon->setProperty("SolidFreeCADCompactMenuArrows", true);
