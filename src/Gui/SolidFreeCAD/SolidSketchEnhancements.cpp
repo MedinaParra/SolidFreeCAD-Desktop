@@ -96,7 +96,7 @@ private:
         }
 
         move(qMax(0, button_->width() - width() - 2),
-             qMax(0, button_->height() - height() - 1));
+             qMax(0, button_->height() - height() - 2));
         setEnabled(button_->isEnabled());
         raise();
     }
@@ -248,7 +248,7 @@ void SolidSketchEnhancements::configureSmartDimension(QToolBar* toolbar)
     for (QAction* action : toolbar->actions()) {
         if (!action
             || action->property("SolidFreeCADCommandName").toString()
-                != QStringLiteral("Sketcher_Dimension")) {
+                != QStringLiteral("Sketcher_CompDimensionTools")) {
             continue;
         }
 
@@ -289,6 +289,7 @@ void SolidSketchEnhancements::configureSmartDimension(QToolBar* toolbar)
 
         button->setMenu(menu);
         button->setPopupMode(QToolButton::MenuButtonPopup);
+        button->setObjectName(QStringLiteral("qt_toolbutton_menubutton"));
         button->setProperty("SolidFreeCADSmartDimensionConfigured", true);
         button->setToolTip(tr(
             "Acota según la selección. Use la flecha para elegir una cota específica."
@@ -306,13 +307,28 @@ void SolidSketchEnhancements::configureCompactMenuArrows(QToolBar* ribbon)
 
     if (!ribbon->property("SolidFreeCADNativeMenuIndicatorsHidden").toBool()) {
         ribbon->setStyleSheet(ribbon->styleSheet() + QStringLiteral(R"QSS(
-            QToolBar#SolidFreeCADRibbon QToolButton::menu-indicator {
+            QToolBar#SolidFreeCADRibbon QToolButton::menu-indicator,
+            QToolBar#SolidFreeCADRibbon QToolButton::menu-arrow {
                 image: none;
                 width: 0px;
                 height: 0px;
                 border: 0;
                 margin: 0;
                 padding: 0;
+            }
+            QToolBar#SolidFreeCADRibbon QToolButton::menu-button,
+            QToolBar#SolidFreeCADRibbon QToolButton#qt_toolbutton_menubutton::menu-button {
+                background: transparent;
+                border: 0;
+                border-left: 0;
+                width: 11px;
+                margin: 0;
+                padding: 0;
+            }
+            QToolBar#SolidFreeCADRibbon QToolButton::menu-button:hover,
+            QToolBar#SolidFreeCADRibbon QToolButton#qt_toolbutton_menubutton::menu-button:hover {
+                background: #e7f0f7;
+                border: 0;
             }
         )QSS"));
         ribbon->setProperty("SolidFreeCADNativeMenuIndicatorsHidden", true);
