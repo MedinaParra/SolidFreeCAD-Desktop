@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import FreeCAD as App
+import Materials  # noqa: F401 - initializes the default material manager
 import Part
 import _PartDesign  # noqa: F401 - registers PartDesign document object types
 import Sketcher
