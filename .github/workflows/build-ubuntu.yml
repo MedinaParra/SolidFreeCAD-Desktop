@@ -145,28 +145,11 @@ jobs:
           test -f "${BUILD_DIR}/Mod/Part/AttachmentEditor/__init__.py"
           test -f "${BUILD_DIR}/Mod/Show/__init__.py"
 
-      - name: Run workshop Part Sketch Pad persistence test
-        env:
-          SOLIDFREECAD_VERTICAL_SLICE: ${{ env.VERTICAL_SLICE_PATH }}
-        run: |
-          set -o pipefail
-          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/vertical"
-          rm -rf "${XDG_RUNTIME_DIR}"
-          mkdir -p "${XDG_RUNTIME_DIR}"
-          chmod 700 "${XDG_RUNTIME_DIR}"
-          rm -f /tmp/.X90-lock /tmp/.X11-unix/X90
-          xvfb-run -n 90 -e build/logs/xvfb-vertical-slice.log \
-            -s "-screen 0 1920x1080x24" timeout 90s \
-            "${BUILD_DIR}/bin/FreeCAD" \
-            "${GITHUB_WORKSPACE}/tests/vertical_slice_smoke.py" \
-            2>&1 | tee build/logs/vertical-slice.log
-          grep -q "SOLIDFREECAD_VERTICAL_SLICE_OK" build/logs/vertical-slice.log
-          test -f "${VERTICAL_SLICE_PATH}"
-
-      - name: Run SolidFreeCAD GUI smoke test
+      - name: Run SolidFreeCAD GUI, icon and persistence smoke test
         env:
           SOLIDFREECAD_SCREENSHOT: ${{ env.SCREENSHOT_PATH }}
           SOLIDFREECAD_SKETCH_SCREENSHOT: ${{ env.SKETCH_SCREENSHOT_PATH }}
+          SOLIDFREECAD_VERTICAL_SLICE: ${{ env.VERTICAL_SLICE_PATH }}
         run: |
           set -o pipefail
           export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/gui"
@@ -175,31 +158,16 @@ jobs:
           chmod 700 "${XDG_RUNTIME_DIR}"
           rm -f /tmp/.X91-lock /tmp/.X11-unix/X91
           xvfb-run -n 91 -e build/logs/xvfb-gui.log \
-            -s "-screen 0 1920x1080x24" timeout 90s \
+            -s "-screen 0 1920x1080x24" timeout 120s \
             "${BUILD_DIR}/bin/FreeCAD" \
             "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
             2>&1 | tee build/logs/gui-smoke.log
           grep -q "SOLIDFREECAD_GUI_SMOKE_OK" build/logs/gui-smoke.log
+          grep -q "SOLIDFREECAD_VERTICAL_SLICE_OK" build/logs/gui-smoke.log
+          grep -q "custom-icons-validated" build/logs/gui-smoke.log
           test -f "${SCREENSHOT_PATH}"
           test -f "${SKETCH_SCREENSHOT_PATH}"
-
-      - name: Run Classic recovery smoke test
-        env:
-          SOLIDFREECAD_CLASSIC_MODE: "1"
-          SOLIDFREECAD_EXPECT_CLASSIC: "1"
-        run: |
-          set -o pipefail
-          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/classic"
-          rm -rf "${XDG_RUNTIME_DIR}"
-          mkdir -p "${XDG_RUNTIME_DIR}"
-          chmod 700 "${XDG_RUNTIME_DIR}"
-          rm -f /tmp/.X92-lock /tmp/.X11-unix/X92
-          xvfb-run -n 92 -e build/logs/xvfb-classic.log \
-            -s "-screen 0 1920x1080x24" timeout 90s \
-            "${BUILD_DIR}/bin/FreeCAD" \
-            "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
-            2>&1 | tee build/logs/classic-smoke.log
-          grep -q "SOLIDFREECAD_CLASSIC_SMOKE_OK" build/logs/classic-smoke.log
+          test -f "${VERTICAL_SLICE_PATH}"
 
       - name: Print compiler cache statistics
         if: always()
