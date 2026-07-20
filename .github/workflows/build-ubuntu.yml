@@ -33,7 +33,8 @@ jobs:
       CCACHE_MAXSIZE: 1G
       SOURCE_DIR: ${{ github.workspace }}/build/freecad-source
       BUILD_DIR: ${{ github.workspace }}/build/freecad-build
-      SCREENSHOT_PATH: ${{ github.workspace }}/build/artifacts/solidfreecad-bootstrap.png
+      SCREENSHOT_PATH: ${{ github.workspace }}/build/artifacts/solidfreecad-modeling.png
+      SKETCH_SCREENSHOT_PATH: ${{ github.workspace }}/build/artifacts/solidfreecad-sketch.png
       VERTICAL_SLICE_PATH: ${{ github.workspace }}/build/artifacts/workshop-vertical-slice.FCStd
 
     steps:
@@ -155,6 +156,7 @@ jobs:
       - name: Run SolidFreeCAD GUI smoke test
         env:
           SOLIDFREECAD_SCREENSHOT: ${{ env.SCREENSHOT_PATH }}
+          SOLIDFREECAD_SKETCH_SCREENSHOT: ${{ env.SKETCH_SCREENSHOT_PATH }}
         run: |
           set -o pipefail
           xvfb-run -a -s "-screen 0 1920x1080x24" timeout 90s \
@@ -163,6 +165,7 @@ jobs:
             2>&1 | tee build/logs/gui-smoke.log
           grep -q "SOLIDFREECAD_GUI_SMOKE_OK" build/logs/gui-smoke.log
           test -f "${SCREENSHOT_PATH}"
+          test -f "${SKETCH_SCREENSHOT_PATH}"
 
       - name: Run Classic recovery smoke test
         env:
@@ -180,7 +183,7 @@ jobs:
         if: always()
         run: ccache --show-stats || true
 
-      - name: Upload build logs, screenshot and FCStd vertical slice
+      - name: Upload build logs, screenshots and FCStd vertical slice
         if: always()
         uses: actions/upload-artifact@v4
         with:
