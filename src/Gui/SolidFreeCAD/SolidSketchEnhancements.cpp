@@ -250,8 +250,15 @@ void SolidSketchEnhancements::refreshRibbon()
                 continue;
             }
 
-            action->setIcon(customCommandIcon(commandName, QSize(30, 30)));
+            const QString appliedCommand =
+                action->property("SolidFreeCADCustomIconCommand").toString();
+            if (appliedCommand == commandName) {
+                continue;
+            }
+
+            action->setProperty("SolidFreeCADCustomIconCommand", commandName);
             action->setProperty("SolidFreeCADCustomIcon", true);
+            action->setIcon(customCommandIcon(commandName, QSize(30, 30)));
         }
     }
 
