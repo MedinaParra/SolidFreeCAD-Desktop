@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
 from pathlib import Path
 
 import FreeCADGui
 from PySide import QtCore, QtWidgets
 
+
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
 
 expect_classic = os.environ.get("SOLIDFREECAD_EXPECT_CLASSIC") == "1"
 
@@ -22,18 +27,29 @@ if application is None:
     raise RuntimeError("Qt application is not available")
 application.processEvents()
 
-workbench_error: Exception | None = None
+module_error: Exception | None = None
 if not expect_classic:
-    # Load the mechanical-design command catalogue so the screenshot represents
-    # a realistic modeling session instead of the empty Start workbench.
+    # Build-tree executions do not install the Python InitGui.py workbench registry.
+    # Import the compiled modules directly: this registers the same native commands
+    # without depending on the legacy workbench selector.
     try:
-        FreeCADGui.activateWorkbench("PartDesignWorkbench")
-    except Exception as exc:  # preserve the screenshot even if module loading regresses
-        workbench_error = exc
+        import PartDesignGui  # noqa: F401
+        import SketcherGui  # noqa: F401
 
-# Allow FreeCAD's deferred workbench/layout restoration and SolidFreeCAD's
-# chrome enforcement timers to finish before validating or capturing the GUI.
-deadline = time.monotonic() + 1.25
+        from workshop_model import create_workshop_part
+
+        model = create_workshop_part("WorkshopGuiPreview")
+        gui_document = FreeCADGui.activeDocument()
+        if gui_document is None:
+            raise RuntimeError("The workshop preview has no active GUI document")
+        gui_document.activeView().viewAxonometric()
+        gui_document.activeView().fitAll()
+    except Exception as exc:  # preserve the screenshot even if module loading regresses
+        module_error = exc
+
+# Allow native command registration, deferred layout restoration and
+# SolidFreeCAD chrome enforcement timers to finish before validation.
+deadline = time.monotonic() + 1.5
 while time.monotonic() < deadline:
     application.processEvents()
     time.sleep(0.01)
@@ -72,8 +88,8 @@ else:
     if not main_window.grab().save(str(screenshot_path)):
         raise RuntimeError(f"Could not save screenshot to {screenshot_path}")
 
-    if workbench_error is not None:
-        raise RuntimeError(f"Part Design workbench could not be activated: {workbench_error}")
+    if module_error is not None:
+        raise RuntimeError(f"Mechanical modules could not be initialized: {module_error}")
 
     command_toolbars = [ribbon, *ribbon.findChildren(QtWidgets.QToolBar)]
     command_names: set[str] = set()
