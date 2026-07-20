@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import FreeCADGui
@@ -20,6 +21,18 @@ application = QtWidgets.QApplication.instance()
 if application is None:
     raise RuntimeError("Qt application is not available")
 application.processEvents()
+
+if not expect_classic:
+    # Load the mechanical-design command catalogue so the screenshot represents
+    # a realistic modeling session instead of the empty Start workbench.
+    FreeCADGui.activateWorkbench("PartDesignWorkbench")
+
+# Allow FreeCAD's deferred workbench/layout restoration and SolidFreeCAD's
+# chrome enforcement timers to finish before validating or capturing the GUI.
+deadline = time.monotonic() + 1.25
+while time.monotonic() < deadline:
+    application.processEvents()
+    time.sleep(0.01)
 
 ribbon = main_window.findChild(QtWidgets.QToolBar, "SolidFreeCADRibbon")
 command_search = main_window.findChild(QtWidgets.QLineEdit, "SolidFreeCADCommandSearch")
@@ -94,6 +107,16 @@ else:
     menu_bar = main_window.menuBar()
     if menu_bar is not None and menu_bar.isVisible():
         raise RuntimeError("Classic menu bar should be hidden in SolidFreeCAD mode")
+
+    visible_bottom_docks = [
+        dock
+        for dock in main_window.findChildren(QtWidgets.QDockWidget)
+        if dock.isVisible()
+        and main_window.dockWidgetArea(dock) == QtCore.Qt.BottomDockWidgetArea
+    ]
+    if visible_bottom_docks:
+        names = [dock.objectName() or dock.windowTitle() for dock in visible_bottom_docks]
+        raise RuntimeError(f"Bottom utility docks should be hidden: {names}")
 
     print(f"SOLIDFREECAD_GUI_SMOKE_OK screenshot={screenshot_path}")
     QtCore.QTimer.singleShot(0, application.quit)
