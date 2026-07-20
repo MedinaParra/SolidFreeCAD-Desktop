@@ -85,15 +85,18 @@ jobs:
             -DFREECAD_USE_PCH=OFF \
             2>&1 | tee build/logs/configure.log
 
-      - name: Build Material runtime and standard resources
+      - name: Build Material and GUI runtime resources
         run: |
           set -o pipefail
           cmake --build "${BUILD_DIR}" \
-            --target Materials MaterialScripts MaterialToolsLib MaterialLib MaterialModelLib AppearanceLib \
+            --target Materials MaterialScripts MaterialToolsLib MaterialLib MaterialModelLib AppearanceLib Stylesheets_data \
             --parallel 2 \
-            2>&1 | tee build/logs/build-material-runtime.log
+            2>&1 | tee build/logs/build-runtime-resources.log
           find "${BUILD_DIR}" \
             -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' \
+            -print -quit | grep -q .
+          find "${BUILD_DIR}" \
+            -path '*/Gui/Stylesheets/overlay/icons/mode.svg' \
             -print -quit | grep -q .
 
       - name: Build FreeCADGui
@@ -135,13 +138,14 @@ jobs:
           ldd "${BUILD_DIR}/bin/FreeCAD" | grep -q "libFreeCADGui"
           find "${BUILD_DIR}/Mod/PartDesign" -maxdepth 1 -name 'PartDesignGui*' -print -quit | grep -q .
           find "${BUILD_DIR}" -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' -print -quit | grep -q .
+          find "${BUILD_DIR}" -path '*/Gui/Stylesheets/overlay/icons/mode.svg' -print -quit | grep -q .
 
       - name: Run workshop Part Sketch Pad persistence test
         env:
           SOLIDFREECAD_VERTICAL_SLICE: ${{ env.VERTICAL_SLICE_PATH }}
         run: |
           set -o pipefail
-          xvfb-run -a timeout 90s \
+          xvfb-run -a -s "-screen 0 1920x1080x24" timeout 90s \
             "${BUILD_DIR}/bin/FreeCAD" \
             "${GITHUB_WORKSPACE}/tests/vertical_slice_smoke.py" \
             2>&1 | tee build/logs/vertical-slice.log
@@ -153,7 +157,7 @@ jobs:
           SOLIDFREECAD_SCREENSHOT: ${{ env.SCREENSHOT_PATH }}
         run: |
           set -o pipefail
-          xvfb-run -a timeout 90s \
+          xvfb-run -a -s "-screen 0 1920x1080x24" timeout 90s \
             "${BUILD_DIR}/bin/FreeCAD" \
             "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
             2>&1 | tee build/logs/gui-smoke.log
@@ -166,7 +170,7 @@ jobs:
           SOLIDFREECAD_EXPECT_CLASSIC: "1"
         run: |
           set -o pipefail
-          xvfb-run -a timeout 90s \
+          xvfb-run -a -s "-screen 0 1920x1080x24" timeout 90s \
             "${BUILD_DIR}/bin/FreeCAD" \
             "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
             2>&1 | tee build/logs/classic-smoke.log
