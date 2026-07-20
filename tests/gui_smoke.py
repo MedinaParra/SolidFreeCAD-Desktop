@@ -30,9 +30,9 @@ if command_search is None:
     raise RuntimeError("SolidFreeCADCommandSearch was not installed")
 
 native_action_names = {
-    action.property("CommandName")
+    action.objectName()
     for action in ribbon.actions()
-    if action.property("CommandName")
+    if action.objectName()
 }
 required_commands = {
     "Std_New",
