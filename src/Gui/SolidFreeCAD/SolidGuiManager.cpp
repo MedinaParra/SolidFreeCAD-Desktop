@@ -1,5 +1,7 @@
 #include "SolidGuiManager.h"
 
+#include "SolidCommandSearch.h"
+
 #include <QAction>
 #include <QLabel>
 #include <QToolBar>
@@ -80,6 +82,7 @@ void SolidGuiManager::rebuildRibbon()
     }
 
     ribbon_->clear();
+    ribbon_->addWidget(new SolidCommandSearch(ribbon_));
 
     addSection(tr("File"), {
         "Std_New",
