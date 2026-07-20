@@ -5,6 +5,7 @@
 #include <QEvent>
 #include <QMenu>
 #include <QSet>
+#include <QStyle>
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
@@ -274,7 +275,11 @@ bool SolidSketchEnhancements::addMenuCommand(QMenu* menu,
         return false;
     }
 
-    QSet<QAction*> previous(menu->actions().cbegin(), menu->actions().cend());
+    QSet<QAction*> previous;
+    for (QAction* action : menu->actions()) {
+        previous.insert(action);
+    }
+
     command->addTo(menu);
     for (QAction* action : menu->actions()) {
         if (!previous.contains(action)) {
