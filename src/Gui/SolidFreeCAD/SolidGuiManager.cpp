@@ -2,6 +2,7 @@
 
 #include "SolidRibbonWidget.h"
 
+#include <QApplication>
 #include <QDockWidget>
 #include <QEvent>
 #include <QMenuBar>
@@ -35,7 +36,9 @@ bool SolidGuiManager::install(Gui::MainWindow* mainWindow)
     }
 
     mainWindow_ = mainWindow;
-    mainWindow_->installEventFilter(this);
+    if (qApp) {
+        qApp->installEventFilter(this);
+    }
 
     ribbon_ = new QToolBar(tr("SolidFreeCAD Command Manager"), mainWindow_);
     ribbon_->setObjectName(QStringLiteral("SolidFreeCADRibbon"));
@@ -84,8 +87,8 @@ void SolidGuiManager::uninstall()
 {
     commandChangedConnection_.disconnect();
 
-    if (mainWindow_) {
-        mainWindow_->removeEventFilter(this);
+    if (qApp) {
+        qApp->removeEventFilter(this);
     }
 
     if (ribbon_) {
@@ -109,9 +112,19 @@ bool SolidGuiManager::isInstalled() const
 
 bool SolidGuiManager::eventFilter(QObject* watched, QEvent* event)
 {
-    if (watched == mainWindow_ && event
-        && (event->type() == QEvent::Show || event->type() == QEvent::WindowActivate)) {
-        QTimer::singleShot(0, this, [this]() { enforceSolidChrome(); });
+    if (!mainWindow_ || !ribbon_ || !event) {
+        return QObject::eventFilter(watched, event);
+    }
+
+    if (event->type() == QEvent::Show || event->type() == QEvent::WindowActivate) {
+        const bool relevantWidget = watched == mainWindow_
+            || qobject_cast<QMenuBar*>(watched)
+            || qobject_cast<QToolBar*>(watched)
+            || qobject_cast<QDockWidget*>(watched);
+
+        if (relevantWidget) {
+            QTimer::singleShot(0, this, [this]() { enforceSolidChrome(); });
+        }
     }
 
     return QObject::eventFilter(watched, event);
