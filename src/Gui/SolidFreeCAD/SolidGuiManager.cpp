@@ -1,6 +1,7 @@
 #include "SolidGuiManager.h"
 
 #include <QAction>
+#include <QLabel>
 #include <QToolBar>
 
 #include <Gui/Application.h>
@@ -21,7 +22,7 @@ SolidGuiManager::~SolidGuiManager()
 
 bool SolidGuiManager::install(Gui::MainWindow* mainWindow)
 {
-    if (!mainWindow) {
+    if (!mainWindow || !Gui::Application::Instance) {
         return false;
     }
 
@@ -36,16 +37,14 @@ bool SolidGuiManager::install(Gui::MainWindow* mainWindow)
     ribbon_->setFloatable(false);
     ribbon_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
-    addCommand("Std_New");
-    addCommand("Std_Open");
-    addCommand("Std_Save");
-    ribbon_->addSeparator();
-    addCommand("Std_Undo");
-    addCommand("Std_Redo");
-    ribbon_->addSeparator();
-    addCommand("Std_ViewFitAll");
-    addCommand("Std_ViewAxonometric");
+    auto& manager = Gui::Application::Instance->commandManager();
+    commandChangedConnection_ = manager.signalChanged.connect([this]() {
+        if (ribbon_) {
+            rebuildRibbon();
+        }
+    });
 
+    rebuildRibbon();
     mainWindow_->addToolBar(Qt::TopToolBarArea, ribbon_);
     ribbon_->show();
     return true;
@@ -53,6 +52,8 @@ bool SolidGuiManager::install(Gui::MainWindow* mainWindow)
 
 void SolidGuiManager::uninstall()
 {
+    commandChangedConnection_.disconnect();
+
     if (!ribbon_) {
         mainWindow_ = nullptr;
         return;
@@ -72,6 +73,60 @@ bool SolidGuiManager::isInstalled() const
     return ribbon_ != nullptr;
 }
 
+void SolidGuiManager::rebuildRibbon()
+{
+    if (!ribbon_) {
+        return;
+    }
+
+    ribbon_->clear();
+
+    addSection(tr("File"), {
+        "Std_New",
+        "Std_Open",
+        "Std_Save",
+        "Std_Undo",
+        "Std_Redo",
+    });
+
+    addSection(tr("View"), {
+        "Std_ViewFitAll",
+        "Std_ViewAxonometric",
+    });
+
+    addSection(tr("Part Design"), {
+        "PartDesign_Body",
+        "PartDesign_NewSketch",
+        "PartDesign_Pad",
+        "PartDesign_Pocket",
+        "PartDesign_Fillet",
+        "PartDesign_Chamfer",
+    });
+}
+
+void SolidGuiManager::addSection(
+    const QString& title,
+    std::initializer_list<const char*> commandNames
+)
+{
+    if (!ribbon_) {
+        return;
+    }
+
+    if (!ribbon_->actions().isEmpty()) {
+        ribbon_->addSeparator();
+    }
+
+    auto* label = new QLabel(title, ribbon_);
+    label->setObjectName(QStringLiteral("SolidFreeCADRibbonSection"));
+    label->setMargin(6);
+    ribbon_->addWidget(label);
+
+    for (const char* commandName : commandNames) {
+        addCommand(commandName);
+    }
+}
+
 bool SolidGuiManager::addCommand(const char* commandName)
 {
     if (!ribbon_ || !commandName || !*commandName || !Gui::Application::Instance) {
@@ -86,7 +141,7 @@ bool SolidGuiManager::addCommand(const char* commandName)
 
     QAction* unavailable = ribbon_->addAction(QString::fromLatin1(commandName));
     unavailable->setEnabled(false);
-    unavailable->setToolTip(tr("FreeCAD command is not available in this build"));
+    unavailable->setToolTip(tr("Command available after loading the related FreeCAD workbench"));
     return false;
 }
 
