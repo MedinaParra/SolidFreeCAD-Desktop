@@ -7,6 +7,8 @@ set(SolidFreeCADGui_SRCS
     SolidGuiBootstrap.h
     SolidGuiManager.cpp
     SolidGuiManager.h
+    SolidRibbonWidget.cpp
+    SolidRibbonWidget.h
 )
 
 target_sources(FreeCADGui PRIVATE ${SolidFreeCADGui_SRCS})
