@@ -88,6 +88,8 @@ class ApplyOverlayTest(unittest.TestCase):
             self.assertIn('#include "SolidFreeCAD/SolidGuiBootstrap.h"', main_window)
             self.assertIn("SolidFreeCAD::installGui(this);", main_window)
             self.assertIn("SolidFreeCAD::uninstallGui();", main_window)
+            self.assertIn("solidFreeCADProfileShape", sketch_view)
+            self.assertIn("setupCoinGeometry(", sketch_view)
             self.assertIn("pcSketchFacesToggle->on = true;", sketch_view)
             self.assertIn(
                 "pcSketchFacesToggle->on = Visibility.getValue();", sketch_view
@@ -114,6 +116,7 @@ class ApplyOverlayTest(unittest.TestCase):
             self.assertEqual(cmake.count("add_subdirectory(SolidFreeCAD)"), 1)
             self.assertEqual(main_window.count("SolidFreeCAD::installGui(this);"), 1)
             self.assertEqual(main_window.count("SolidFreeCAD::uninstallGui();"), 1)
+            self.assertEqual(sketch_view.count("solidFreeCADProfileShape"), 2)
             self.assertEqual(sketch_view.count("pcSketchFacesToggle->on = true;"), 1)
             self.assertEqual(
                 sketch_view.count("pcSketchFacesToggle->on = Visibility.getValue();"), 1
