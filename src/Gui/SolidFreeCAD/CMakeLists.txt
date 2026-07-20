@@ -13,10 +13,21 @@ set(SolidFreeCADGui_SRCS
     SolidSketchEnhancements.h
 )
 
-target_sources(FreeCADGui PRIVATE ${SolidFreeCADGui_SRCS})
+set(SolidFreeCAD_RES_SRCS
+    Resources/SolidFreeCAD.qrc
+)
+qt_add_resources(SolidFreeCAD_QRC_SRCS ${SolidFreeCAD_RES_SRCS})
+
+target_sources(FreeCADGui PRIVATE
+    ${SolidFreeCADGui_SRCS}
+    ${SolidFreeCAD_QRC_SRCS}
+)
 
 target_include_directories(FreeCADGui PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-source_group("SolidFreeCAD" FILES ${SolidFreeCADGui_SRCS})
+source_group("SolidFreeCAD" FILES
+    ${SolidFreeCADGui_SRCS}
+    ${SolidFreeCAD_RES_SRCS}
+)
