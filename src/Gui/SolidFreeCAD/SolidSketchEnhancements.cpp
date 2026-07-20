@@ -1,10 +1,13 @@
 #include "SolidSketchEnhancements.h"
 
+#include "SolidIconFactory.h"
+
 #include <QAction>
 #include <QEvent>
 #include <QLabel>
 #include <QMenu>
 #include <QPointer>
+#include <QSize>
 #include <QStyle>
 #include <QTimer>
 #include <QToolBar>
@@ -234,6 +237,22 @@ void SolidSketchEnhancements::refreshRibbon()
         ribbon->findChildren<QToolBar*>(QStringLiteral("SolidFreeCADCommandStrip"));
     for (QToolBar* toolbar : commandStrips) {
         configureSmartDimension(toolbar);
+        toolbar->setIconSize(QSize(30, 30));
+
+        for (QAction* action : toolbar->actions()) {
+            if (!action) {
+                continue;
+            }
+
+            const QString commandName =
+                action->property("SolidFreeCADCommandName").toString();
+            if (!hasCustomCommandIcon(commandName)) {
+                continue;
+            }
+
+            action->setIcon(customCommandIcon(commandName, QSize(30, 30)));
+            action->setProperty("SolidFreeCADCustomIcon", true);
+        }
     }
 
     configureCompactMenuArrows(ribbon);
