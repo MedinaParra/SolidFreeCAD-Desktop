@@ -1,0 +1,114 @@
+name: Build Ubuntu prototype
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/build-ubuntu.yml"
+      - "scripts/**"
+      - "src/Gui/SolidFreeCAD/**"
+  push:
+    branches:
+      - "agent/**"
+    paths:
+      - ".github/workflows/build-ubuntu.yml"
+      - "scripts/**"
+      - "src/Gui/SolidFreeCAD/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-ubuntu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-freecad-gui:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1G
+      SOURCE_DIR: ${{ github.workspace }}/build/freecad-source
+      BUILD_DIR: ${{ github.workspace }}/build/freecad-build
+
+    steps:
+      - name: Check out SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Fetch official FreeCAD 1.1.1 source
+        run: |
+          git clone \
+            --branch 1.1.1 \
+            --depth 1 \
+            --recurse-submodules \
+            --shallow-submodules \
+            https://github.com/FreeCAD/FreeCAD.git \
+            "${SOURCE_DIR}"
+          test "$(git -C "${SOURCE_DIR}" describe --tags --exact-match)" = "1.1.1"
+
+      - name: Apply SolidFreeCAD GUI overlay
+        run: python3 scripts/apply-overlay.py "${SOURCE_DIR}"
+
+      - name: Install official FreeCAD Ubuntu dependencies
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: ./package/ubuntu/install-apt-packages.sh
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py') }}
+          restore-keys: |
+            solidfreecad-ubuntu22-gcc-
+
+      - name: Configure official FreeCAD source
+        run: |
+          set -o pipefail
+          mkdir -p "${BUILD_DIR}" build/logs
+          cmake \
+            -S "${SOURCE_DIR}" \
+            -B "${BUILD_DIR}" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFREECAD_USE_PCH=OFF \
+            2>&1 | tee build/logs/configure.log
+
+      - name: Build FreeCADGui
+        run: |
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" \
+            --target FreeCADGui \
+            --parallel 2 \
+            2>&1 | tee build/logs/build-freecad-gui.log
+
+      - name: Build FreeCAD executable
+        run: |
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" \
+            --target FreeCAD \
+            --parallel 2 \
+            2>&1 | tee build/logs/build-freecad.log
+
+      - name: Verify build products
+        run: |
+          test -f "${BUILD_DIR}/lib/libFreeCADGui.so"
+          test -x "${BUILD_DIR}/bin/FreeCAD"
+          "${BUILD_DIR}/bin/FreeCAD" --version
+
+      - name: Print compiler cache statistics
+        if: always()
+        run: ccache --show-stats || true
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidfreecad-ubuntu-build-logs
+          path: |
+            build/logs
+            build/freecad-build/CMakeCache.txt
+            build/freecad-build/CMakeFiles/CMakeError.log
+          if-no-files-found: ignore
