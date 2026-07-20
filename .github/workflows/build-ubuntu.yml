@@ -7,7 +7,7 @@ on:
       - ".github/workflows/build-ubuntu.yml"
       - "scripts/**"
       - "src/Gui/SolidFreeCAD/**"
-      - "tests/gui_smoke.py"
+      - "tests/**"
   push:
     branches:
       - "agent/**"
@@ -15,7 +15,7 @@ on:
       - ".github/workflows/build-ubuntu.yml"
       - "scripts/**"
       - "src/Gui/SolidFreeCAD/**"
-      - "tests/gui_smoke.py"
+      - "tests/**"
 
 permissions:
   contents: read
@@ -34,6 +34,7 @@ jobs:
       SOURCE_DIR: ${{ github.workspace }}/build/freecad-source
       BUILD_DIR: ${{ github.workspace }}/build/freecad-build
       SCREENSHOT_PATH: ${{ github.workspace }}/build/artifacts/solidfreecad-bootstrap.png
+      VERTICAL_SLICE_PATH: ${{ github.workspace }}/build/artifacts/workshop-vertical-slice.FCStd
 
     steps:
       - name: Check out SolidFreeCAD Desktop
@@ -123,6 +124,18 @@ jobs:
           ldd "${BUILD_DIR}/bin/FreeCAD" | grep -q "libFreeCADGui"
           find "${BUILD_DIR}/Mod/PartDesign" -maxdepth 1 -name 'PartDesignGui*' -print -quit | grep -q .
 
+      - name: Run workshop Part Sketch Pad persistence test
+        env:
+          SOLIDFREECAD_VERTICAL_SLICE: ${{ env.VERTICAL_SLICE_PATH }}
+        run: |
+          set -o pipefail
+          xvfb-run -a timeout 90s \
+            "${BUILD_DIR}/bin/FreeCAD" \
+            "${GITHUB_WORKSPACE}/tests/vertical_slice_smoke.py" \
+            2>&1 | tee build/logs/vertical-slice.log
+          grep -q "SOLIDFREECAD_VERTICAL_SLICE_OK" build/logs/vertical-slice.log
+          test -f "${VERTICAL_SLICE_PATH}"
+
       - name: Run SolidFreeCAD GUI smoke test
         env:
           SOLIDFREECAD_SCREENSHOT: ${{ env.SCREENSHOT_PATH }}
@@ -151,7 +164,7 @@ jobs:
         if: always()
         run: ccache --show-stats || true
 
-      - name: Upload build logs and screenshot
+      - name: Upload build logs, screenshot and FCStd vertical slice
         if: always()
         uses: actions/upload-artifact@v4
         with:
