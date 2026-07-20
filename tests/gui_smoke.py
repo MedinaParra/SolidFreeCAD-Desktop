@@ -141,6 +141,7 @@ else:
     command_toolbars = [ribbon, *ribbon.findChildren(QtWidgets.QToolBar)]
     command_names: set[str] = set()
     visible_actions = 0
+    custom_icon_actions = []
     smart_dimension_button = None
 
     for toolbar in command_toolbars:
@@ -150,6 +151,10 @@ else:
                 command_names.add(str(command_name))
             if str(command_name) == "Sketcher_CompDimensionTools":
                 smart_dimension_button = toolbar.widgetForAction(action)
+            if action.property("SolidFreeCADCustomIcon"):
+                custom_icon_actions.append(action)
+                if action.icon().isNull():
+                    raise RuntimeError(f"Custom icon is null for {command_name}")
             if not action.isSeparator() and action.isVisible():
                 visible_actions += 1
 
@@ -180,6 +185,11 @@ else:
 
     if visible_actions < 40:
         raise RuntimeError(f"Tabbed ribbon has too few visible actions: {visible_actions}")
+    if len(custom_icon_actions) < 20:
+        raise RuntimeError(
+            f"Too few SolidFreeCAD vector icons were applied: {len(custom_icon_actions)}"
+        )
+    stage(f"custom-icons-validated-{len(custom_icon_actions)}")
 
     if not isinstance(smart_dimension_button, QtWidgets.QToolButton):
         raise RuntimeError("Cota inteligente is not represented by a tool button")
@@ -298,9 +308,45 @@ else:
     active_document.recompute()
     process_for(0.25)
 
+    vertical_slice_path = Path(
+        os.environ.get("SOLIDFREECAD_VERTICAL_SLICE", "workshop-vertical-slice.FCStd")
+    ).resolve()
+    vertical_slice_path.parent.mkdir(parents=True, exist_ok=True)
+    expected_volume = float(model.pad.Shape.Volume)
+    model.document.saveAs(str(vertical_slice_path))
+    source_document_name = model.document.Name
+    App.closeDocument(source_document_name)
+    process_for(0.1)
+
+    reopened = App.openDocument(str(vertical_slice_path))
+    if reopened is None:
+        raise RuntimeError("The generated FCStd file could not be reopened")
+    reopened_body = reopened.getObject("Body")
+    reopened_sketch = reopened.getObject("Sketch")
+    reopened_pad = reopened.getObject("Pad")
+    if reopened_body is None or reopened_body.TypeId != "PartDesign::Body":
+        raise RuntimeError("Reopened FCStd is missing its Part Design Body")
+    if reopened_sketch is None or reopened_sketch.TypeId != "Sketcher::SketchObject":
+        raise RuntimeError("Reopened FCStd is missing its base Sketch")
+    if reopened_pad is None or reopened_pad.TypeId != "PartDesign::Pad":
+        raise RuntimeError("Reopened FCStd is missing its Pad")
+    reopened.recompute()
+    if reopened_pad.Shape.isNull() or not reopened_pad.Shape.isValid():
+        raise RuntimeError("Reopened Pad is not a valid solid")
+    if abs(float(reopened_pad.Shape.Volume) - expected_volume) > max(
+        1e-6, expected_volume * 1e-8
+    ):
+        raise RuntimeError("Reopened Pad volume changed after FCStd persistence")
+
+    print(
+        "SOLIDFREECAD_VERTICAL_SLICE_OK "
+        f"path={vertical_slice_path} volume_mm3={reopened_pad.Shape.Volume:.3f}",
+        flush=True,
+    )
     print(
         "SOLIDFREECAD_GUI_SMOKE_OK "
         f"modeling={modeling_screenshot} sketch={sketch_screenshot}",
         flush=True,
     )
+    App.closeDocument(reopened.Name)
     QtCore.QTimer.singleShot(0, application.quit)
