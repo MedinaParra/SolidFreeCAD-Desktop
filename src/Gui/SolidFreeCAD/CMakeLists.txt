@@ -7,6 +7,8 @@ set(SolidFreeCADGui_SRCS
     SolidGuiBootstrap.h
     SolidGuiManager.cpp
     SolidGuiManager.h
+    SolidIconFactory.cpp
+    SolidIconFactory.h
     SolidRibbonWidget.cpp
     SolidRibbonWidget.h
     SolidSketchEnhancements.cpp
