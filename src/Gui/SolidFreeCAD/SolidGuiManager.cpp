@@ -1,12 +1,10 @@
 #include "SolidGuiManager.h"
 
-#include "SolidCommandBridge.h"
-
 #include <QAction>
-#include <QByteArray>
-#include <QMessageBox>
 #include <QToolBar>
 
+#include <Gui/Application.h>
+#include <Gui/Command.h>
 #include <Gui/MainWindow.h>
 
 namespace SolidFreeCAD
@@ -38,15 +36,15 @@ bool SolidGuiManager::install(Gui::MainWindow* mainWindow)
     ribbon_->setFloatable(false);
     ribbon_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
-    addCommandAction(tr("New"), "Std_New");
-    addCommandAction(tr("Open"), "Std_Open");
-    addCommandAction(tr("Save"), "Std_Save");
+    addCommand("Std_New");
+    addCommand("Std_Open");
+    addCommand("Std_Save");
     ribbon_->addSeparator();
-    addCommandAction(tr("Undo"), "Std_Undo");
-    addCommandAction(tr("Redo"), "Std_Redo");
+    addCommand("Std_Undo");
+    addCommand("Std_Redo");
     ribbon_->addSeparator();
-    addCommandAction(tr("Fit all"), "Std_ViewFitAll");
-    addCommandAction(tr("Isometric"), "Std_ViewAxonometric");
+    addCommand("Std_ViewFitAll");
+    addCommand("Std_ViewAxonometric");
 
     mainWindow_->addToolBar(Qt::TopToolBarArea, ribbon_);
     ribbon_->show();
@@ -74,29 +72,22 @@ bool SolidGuiManager::isInstalled() const
     return ribbon_ != nullptr;
 }
 
-QAction* SolidGuiManager::addCommandAction(const QString& label, const char* commandName)
+bool SolidGuiManager::addCommand(const char* commandName)
 {
-    if (!ribbon_) {
-        return nullptr;
+    if (!ribbon_ || !commandName || !*commandName || !Gui::Application::Instance) {
+        return false;
     }
 
-    QAction* action = ribbon_->addAction(label);
-    const QString command = QString::fromLatin1(commandName);
-    action->setData(command);
-    action->setEnabled(SolidCommandBridge::isAvailable(commandName));
+    auto& manager = Gui::Application::Instance->commandManager();
+    if (Gui::Command* command = manager.getCommandByName(commandName)) {
+        command->addTo(ribbon_);
+        return true;
+    }
 
-    connect(action, &QAction::triggered, this, [this, command]() {
-        const QByteArray encoded = command.toLatin1();
-        if (!SolidCommandBridge::invoke(encoded.constData()) && mainWindow_) {
-            QMessageBox::warning(
-                mainWindow_,
-                tr("SolidFreeCAD"),
-                tr("FreeCAD command is not available: %1").arg(command)
-            );
-        }
-    });
-
-    return action;
+    QAction* unavailable = ribbon_->addAction(QString::fromLatin1(commandName));
+    unavailable->setEnabled(false);
+    unavailable->setToolTip(tr("FreeCAD command is not available in this build"));
+    return false;
 }
 
 }  // namespace SolidFreeCAD
