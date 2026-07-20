@@ -140,7 +140,7 @@ void SolidGuiManager::rebuildRibbon()
 
     addSection(tr("View"), {
         "Std_ViewFitAll",
-        "Std_ViewAxonometric",
+        "Std_ViewIsometric",
     });
 
     addSection(tr("Part Design"), {
