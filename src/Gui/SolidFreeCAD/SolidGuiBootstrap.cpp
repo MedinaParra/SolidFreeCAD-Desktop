@@ -8,6 +8,7 @@
 #include <QtGlobal>
 
 #include <App/Application.h>
+#include <Base/Parameter.h>
 
 namespace SolidFreeCAD
 {
