@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/SolidFreeCAD">
+    <file alias="arrow-down.svg">icons/arrow-down.svg</file>
+  </qresource>
+</RCC>
