@@ -150,7 +150,9 @@ jobs:
           SOLIDFREECAD_VERTICAL_SLICE: ${{ env.VERTICAL_SLICE_PATH }}
         run: |
           set -o pipefail
-          xvfb-run -a -s "-screen 0 1920x1080x24" timeout 90s \
+          rm -f /tmp/.X90-lock /tmp/.X11-unix/X90
+          xvfb-run -n 90 -e build/logs/xvfb-vertical-slice.log \
+            -s "-screen 0 1920x1080x24" timeout 90s \
             "${BUILD_DIR}/bin/FreeCAD" \
             "${GITHUB_WORKSPACE}/tests/vertical_slice_smoke.py" \
             2>&1 | tee build/logs/vertical-slice.log
@@ -163,7 +165,9 @@ jobs:
           SOLIDFREECAD_SKETCH_SCREENSHOT: ${{ env.SKETCH_SCREENSHOT_PATH }}
         run: |
           set -o pipefail
-          xvfb-run -a -s "-screen 0 1920x1080x24" timeout 90s \
+          rm -f /tmp/.X91-lock /tmp/.X11-unix/X91
+          xvfb-run -n 91 -e build/logs/xvfb-gui.log \
+            -s "-screen 0 1920x1080x24" timeout 90s \
             "${BUILD_DIR}/bin/FreeCAD" \
             "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
             2>&1 | tee build/logs/gui-smoke.log
@@ -177,7 +181,9 @@ jobs:
           SOLIDFREECAD_EXPECT_CLASSIC: "1"
         run: |
           set -o pipefail
-          xvfb-run -a -s "-screen 0 1920x1080x24" timeout 90s \
+          rm -f /tmp/.X92-lock /tmp/.X11-unix/X92
+          xvfb-run -n 92 -e build/logs/xvfb-classic.log \
+            -s "-screen 0 1920x1080x24" timeout 90s \
             "${BUILD_DIR}/bin/FreeCAD" \
             "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
             2>&1 | tee build/logs/classic-smoke.log
