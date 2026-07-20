@@ -16,6 +16,12 @@ if str(TESTS_DIR) not in sys.path:
 
 expect_classic = os.environ.get("SOLIDFREECAD_EXPECT_CLASSIC") == "1"
 
+
+def stage(name: str) -> None:
+    print(f"SOLIDFREECAD_STAGE {name}", flush=True)
+
+
+stage("python-start")
 main_window = FreeCADGui.getMainWindow()
 if main_window is None:
     raise RuntimeError("FreeCAD main window is not available")
@@ -27,6 +33,7 @@ application = QtWidgets.QApplication.instance()
 if application is None:
     raise RuntimeError("Qt application is not available")
 application.processEvents()
+stage("window-visible")
 
 
 def process_for(seconds: float) -> None:
@@ -51,12 +58,15 @@ module_error: Exception | None = None
 model = None
 if not expect_classic:
     try:
+        stage("load-mechanical-modules")
         import PartDesignGui  # noqa: F401
         import SketcherGui  # noqa: F401
+        stage("mechanical-modules-loaded")
 
         from workshop_model import create_workshop_part
 
         model = create_workshop_part("WorkshopGuiPreview")
+        stage("workshop-model-created")
         App.setActiveDocument(model.document.Name)
         model.body.Tip = model.pad
         model.sketch.Visibility = False
@@ -74,10 +84,12 @@ if not expect_classic:
         active_view.viewAxonometric()
         active_view.fitAll()
         active_view.redraw()
+        stage("workshop-view-ready")
     except Exception as exc:
         module_error = exc
 
 process_for(1.75)
+stage("startup-events-drained")
 
 ribbon = main_window.findChild(QtWidgets.QToolBar, "SolidFreeCADRibbon")
 command_search = main_window.findChild(QtWidgets.QLineEdit, "SolidFreeCADCommandSearch")
@@ -91,7 +103,7 @@ if expect_classic:
     if ribbon_tabs is not None:
         raise RuntimeError("SolidFreeCADRibbonTabs must not be installed in Classic mode")
 
-    print("SOLIDFREECAD_CLASSIC_SMOKE_OK")
+    print("SOLIDFREECAD_CLASSIC_SMOKE_OK", flush=True)
     QtCore.QTimer.singleShot(0, application.quit)
 else:
     if ribbon is None or not ribbon.isVisible():
@@ -102,6 +114,7 @@ else:
         raise RuntimeError("The tabbed SolidFreeCAD ribbon is incomplete")
     if module_error is not None or model is None:
         raise RuntimeError(f"Mechanical modules could not be initialized: {module_error}")
+    stage("ribbon-validated")
 
     model_docks = [
         dock
@@ -196,6 +209,13 @@ else:
             f"Cota inteligente is missing dimension variants: {sorted(missing_dimensions)}"
         )
 
+    menu_arrows = ribbon.findChildren(QtWidgets.QLabel, "SolidFreeCADMenuArrow")
+    if not menu_arrows:
+        raise RuntimeError("Compact dropdown arrows were not installed")
+    if any(arrow.text() != "▾" for arrow in menu_arrows):
+        raise RuntimeError("A dropdown indicator does not use the compact chevron")
+    stage(f"smart-dimension-and-arrows-validated-{len(menu_arrows)}")
+
     view_parameters = App.ParamGet("User parameter:BaseApp/Preferences/View")
     if view_parameters.GetUnsigned("FullyConstrainedColor", 0) != 0x000000FF:
         raise RuntimeError("Fully constrained sketch status color is not black")
@@ -211,6 +231,7 @@ else:
         raise RuntimeError(
             f"Closed sketch contour alpha is not translucent: {sketch_face_alpha}"
         )
+    stage("sketch-colors-validated")
 
     completer = command_search.completer()
     if completer is None or completer.model() is None or completer.model().rowCount() == 0:
@@ -240,7 +261,9 @@ else:
     modeling_screenshot = Path(
         os.environ.get("SOLIDFREECAD_SCREENSHOT", "solidfreecad-modeling.png")
     ).resolve()
+    stage("capture-modeling-start")
     capture_window(modeling_screenshot)
+    stage("capture-modeling-complete")
 
     sketch_index = next(
         (index for index in range(ribbon_tabs.count()) if ribbon_tabs.tabText(index) == "Croquis"),
@@ -253,7 +276,9 @@ else:
     model.pad.Visibility = False
     model.sketch.Visibility = True
     active_document.recompute()
+    stage("sketch-edit-start")
     gui_document.setEdit(model.sketch.Name)
+    stage("sketch-edit-entered")
     active_view.viewTop()
     active_view.fitAll()
     active_view.redraw()
@@ -262,9 +287,12 @@ else:
     sketch_screenshot = Path(
         os.environ.get("SOLIDFREECAD_SKETCH_SCREENSHOT", "solidfreecad-sketch.png")
     ).resolve()
+    stage("capture-sketch-start")
     capture_window(sketch_screenshot)
+    stage("capture-sketch-complete")
 
     gui_document.resetEdit()
+    stage("sketch-edit-reset")
     model.sketch.Visibility = False
     model.pad.Visibility = True
     active_document.recompute()
@@ -272,6 +300,7 @@ else:
 
     print(
         "SOLIDFREECAD_GUI_SMOKE_OK "
-        f"modeling={modeling_screenshot} sketch={sketch_screenshot}"
+        f"modeling={modeling_screenshot} sketch={sketch_screenshot}",
+        flush=True,
     )
     QtCore.QTimer.singleShot(0, application.quit)
