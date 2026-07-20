@@ -1,12 +1,13 @@
 #pragma once
 
-#include <initializer_list>
+#include <QList>
+#include <QPointer>
 
 #include <QObject>
-#include <QString>
 
 #include <boost/signals2/connection.hpp>
 
+class QMenuBar;
 class QToolBar;
 
 namespace Gui
@@ -16,6 +17,8 @@ class MainWindow;
 
 namespace SolidFreeCAD
 {
+
+class SolidRibbonWidget;
 
 class SolidGuiManager final : public QObject
 {
@@ -28,12 +31,15 @@ public:
     bool isInstalled() const;
 
 private:
+    void hideClassicChrome();
+    void restoreClassicChrome();
     void rebuildRibbon();
-    void addSection(const QString& title, std::initializer_list<const char*> commandNames);
-    bool addCommand(const char* commandName);
 
     Gui::MainWindow* mainWindow_ = nullptr;
     QToolBar* ribbon_ = nullptr;
+    SolidRibbonWidget* ribbonShell_ = nullptr;
+    QPointer<QMenuBar> hiddenMenuBar_;
+    QList<QPointer<QToolBar>> hiddenToolbars_;
     boost::signals2::scoped_connection commandChangedConnection_;
 };
 
