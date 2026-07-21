@@ -162,12 +162,33 @@ bool SolidWorkspacePolish::install(Gui::MainWindow* mainWindow)
     for (const int delay : {0, 350, 900, 1700, 2600}) {
         QTimer::singleShot(delay, this, [this]() { apply(); });
     }
+
+    documentTimer_ = new QTimer(this);
+    documentTimer_->setInterval(400);
+    connect(documentTimer_, &QTimer::timeout, this, [this]() {
+        if (!mainWindow_) {
+            return;
+        }
+        auto* ribbon = mainWindow_->findChild<QToolBar*>(QStringLiteral("SolidFreeCADRibbon"));
+        QWidget* shell = ribbon
+            ? ribbon->findChild<QWidget*>(QStringLiteral("SolidFreeCADRibbonShell"))
+            : nullptr;
+        if (shell) {
+            updateDocumentTitle(shell);
+        }
+    });
+    documentTimer_->start();
     return true;
 }
 
 void SolidWorkspacePolish::uninstall()
 {
     installed_ = false;
+    if (documentTimer_) {
+        documentTimer_->stop();
+        documentTimer_->deleteLater();
+    }
+    documentTimer_.clear();
     contextBadge_.clear();
     documentTitle_.clear();
     mainWindow_ = nullptr;
@@ -376,20 +397,16 @@ void SolidWorkspacePolish::polishSidePanels()
     }
 
     QDockWidget* modelDock = nullptr;
-    const auto docks = mainWindow_->findChildren<QDockWidget*>(QString(), Qt::FindDirectChildrenOnly);
+    const auto docks = mainWindow_->findChildren<QDockWidget*>();
     for (QDockWidget* dock : docks) {
         if (!dock || dock == propertyDock) {
             continue;
         }
 
+        const QString title = dock->windowTitle().trimmed().toLower();
         const QString identity =
             (dock->objectName() + QLatin1Char(' ') + dock->windowTitle()).toLower();
-        const bool detachedTaskPanel =
-            (dock->isFloating() || mainWindow_->dockWidgetArea(dock) == Qt::NoDockWidgetArea)
-            && (identity.trimmed() == QStringLiteral("tasks")
-                || identity.trimmed() == QStringLiteral("tareas")
-                || identity.contains(QStringLiteral(" task")));
-        if (detachedTaskPanel) {
+        if (title == QStringLiteral("tasks") || title == QStringLiteral("tareas")) {
             dock->hide();
             continue;
         }
