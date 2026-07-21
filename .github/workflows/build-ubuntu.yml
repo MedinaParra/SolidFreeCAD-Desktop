@@ -1,0 +1,319 @@
+name: Build Ubuntu prototype
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/build-ubuntu.yml"
+      - "scripts/**"
+      - "src/Gui/SolidFreeCAD/**"
+      - "tests/**"
+  push:
+    branches:
+      - "agent/**"
+    paths:
+      - ".github/workflows/build-ubuntu.yml"
+      - "scripts/**"
+      - "src/Gui/SolidFreeCAD/**"
+      - "tests/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-ubuntu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-freecad-gui:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1G
+      SOURCE_DIR: ${{ github.workspace }}/build/freecad-source
+      BUILD_DIR: ${{ github.workspace }}/build/freecad-build
+      SCREENSHOT_PATH: ${{ github.workspace }}/build/artifacts/solidfreecad-modeling.png
+      SKETCH_SCREENSHOT_PATH: ${{ github.workspace }}/build/artifacts/solidfreecad-sketch.png
+      VERTICAL_SLICE_PATH: ${{ github.workspace }}/build/artifacts/workshop-vertical-slice.FCStd
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
+
+    steps:
+      - name: Check out SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Fetch official FreeCAD 1.1.1 source
+        run: |
+          git clone \
+            --branch 1.1.1 \
+            --depth 1 \
+            --recurse-submodules \
+            --shallow-submodules \
+            https://github.com/FreeCAD/FreeCAD.git \
+            "${SOURCE_DIR}"
+          test "$(git -C "${SOURCE_DIR}" describe --tags --exact-match)" = "1.1.1"
+
+      - name: Apply SolidFreeCAD GUI overlay
+        run: python3 scripts/apply-overlay.py "${SOURCE_DIR}"
+
+      - name: Apply Ubuntu 22.04 OCCT compatibility patch
+        run: python3 scripts/patch-freecad-ubuntu22.py "${SOURCE_DIR}"
+
+      - name: Install official FreeCAD Ubuntu dependencies
+        working-directory: ${{ env.SOURCE_DIR }}
+        run: |
+          ./package/ubuntu/install-apt-packages.sh
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+
+      - name: Restore compiler cache
+        id: ccache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py', 'scripts/patch-freecad-ubuntu22.py') }}-${{ github.run_id }}
+          restore-keys: |
+            solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py', 'scripts/patch-freecad-ubuntu22.py') }}-
+            solidfreecad-ubuntu22-gcc-
+
+      - name: Configure official FreeCAD source
+        run: |
+          set -o pipefail
+          mkdir -p "${BUILD_DIR}" build/logs build/artifacts
+          cmake \
+            -S "${SOURCE_DIR}" \
+            -B "${BUILD_DIR}" \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DFREECAD_USE_PCH=OFF \
+            2>&1 | tee build/logs/configure.log
+
+      - name: Build Material and GUI runtime resources
+        run: |
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" \
+            --target Materials MaterialScripts MaterialToolsLib MaterialLib MaterialModelLib AppearanceLib Stylesheets_data PartScripts Show \
+            --parallel 2 \
+            2>&1 | tee build/logs/build-runtime-resources.log
+          find "${BUILD_DIR}" \
+            -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' \
+            -print -quit | grep -q .
+          find "${BUILD_DIR}" \
+            -path '*/Gui/Stylesheets/overlay/icons/mode.svg' \
+            -print -quit | grep -q .
+          test -f "${BUILD_DIR}/Mod/Part/AttachmentEditor/__init__.py"
+          test -f "${BUILD_DIR}/Mod/Show/__init__.py"
+
+      - name: Build FreeCADGui
+        run: |
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" \
+            --target FreeCADGui \
+            --parallel 2 \
+            2>&1 | tee build/logs/build-freecad-gui.log
+
+      - name: Build mechanical GUI modules and scripts
+        run: |
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" \
+            --target PartDesignGui PartDesignScripts PartDesignHole SketcherScripts WizardShaft MeasureGui MeasureScripts \
+            --parallel 2 \
+            2>&1 | tee build/logs/build-part-design-gui.log
+
+      - name: Build FreeCAD executable
+        run: |
+          set -o pipefail
+          cmake --build "${BUILD_DIR}" \
+            --target FreeCAD \
+            --parallel 2 \
+            2>&1 | tee build/logs/build-freecad.log
+
+      - name: Save compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: solidfreecad-ubuntu22-gcc-${{ hashFiles('src/Gui/SolidFreeCAD/**', 'scripts/apply-overlay.py', 'scripts/patch-freecad-ubuntu22.py') }}-${{ github.run_id }}
+
+      - name: Verify build products
+        run: |
+          test -f "${SOURCE_DIR}/SOLIDFREECAD_UBUNTU22_COMPAT_PATCHED"
+          test -f "${BUILD_DIR}/lib/libFreeCADGui.so"
+          test -x "${BUILD_DIR}/bin/FreeCAD"
+          ldd "${BUILD_DIR}/bin/FreeCAD" | grep -q "libFreeCADGui"
+          find "${BUILD_DIR}/Mod/PartDesign" -maxdepth 1 -name 'PartDesignGui*' -print -quit | grep -q .
+          find "${BUILD_DIR}/Mod/Sketcher" -maxdepth 1 -name 'SketcherGui*' -print -quit | grep -q .
+          find "${BUILD_DIR}/Mod/Measure" -maxdepth 1 -name 'MeasureGui*' -print -quit | grep -q .
+          test -f "${BUILD_DIR}/Mod/PartDesign/Init.py"
+          test -f "${BUILD_DIR}/Mod/PartDesign/InitGui.py"
+          test -f "${BUILD_DIR}/Mod/PartDesign/WizardShaft/__init__.py"
+          test -f "${BUILD_DIR}/Mod/Sketcher/Init.py"
+          test -f "${BUILD_DIR}/Mod/Sketcher/InitGui.py"
+          test -f "${BUILD_DIR}/Mod/Measure/Init.py"
+          test -f "${BUILD_DIR}/Mod/Measure/InitGui.py"
+          find "${BUILD_DIR}" -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' -print -quit | grep -q .
+          find "${BUILD_DIR}" -path '*/Gui/Stylesheets/overlay/icons/mode.svg' -print -quit | grep -q .
+          test -f "${BUILD_DIR}/Mod/Part/AttachmentEditor/__init__.py"
+          test -f "${BUILD_DIR}/Mod/Show/__init__.py"
+
+      - name: Run mechanical workbench registration smoke test
+        run: |
+          set -o pipefail
+          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/workbenches"
+          rm -rf "${XDG_RUNTIME_DIR}"
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          chmod 700 "${XDG_RUNTIME_DIR}"
+          rm -f /tmp/.X90-lock /tmp/.X11-unix/X90
+          xvfb-run -n 90 -e build/logs/xvfb-workbenches.log \
+            -s "-screen 0 1280x800x24" timeout 120s \
+            "${BUILD_DIR}/bin/FreeCAD" \
+            "${GITHUB_WORKSPACE}/tests/workbench_smoke.py" \
+            2>&1 | tee build/logs/workbench-smoke.log
+          grep -q "SOLIDFREECAD_WORKBENCH_SMOKE_OK" build/logs/workbench-smoke.log
+          ! grep -q "Unknown command 'Std_Measure'" build/logs/workbench-smoke.log
+
+      - name: Run SolidFreeCAD GUI, icon and persistence smoke test
+        env:
+          SOLIDFREECAD_SCREENSHOT: ${{ env.SCREENSHOT_PATH }}
+          SOLIDFREECAD_SKETCH_SCREENSHOT: ${{ env.SKETCH_SCREENSHOT_PATH }}
+          SOLIDFREECAD_VERTICAL_SLICE: ${{ env.VERTICAL_SLICE_PATH }}
+        run: |
+          set -o pipefail
+          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/gui"
+          rm -rf "${XDG_RUNTIME_DIR}"
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          chmod 700 "${XDG_RUNTIME_DIR}"
+          rm -f /tmp/.X91-lock /tmp/.X11-unix/X91
+          xvfb-run -n 91 -e build/logs/xvfb-gui.log \
+            -s "-screen 0 1920x1080x24" timeout 120s \
+            "${BUILD_DIR}/bin/FreeCAD" \
+            "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
+            2>&1 | tee build/logs/gui-smoke.log
+          grep -q "SOLIDFREECAD_GUI_SMOKE_OK" build/logs/gui-smoke.log
+          grep -q "SOLIDFREECAD_VERTICAL_SLICE_OK" build/logs/gui-smoke.log
+          grep -q "custom-icons-validated" build/logs/gui-smoke.log
+          ! grep -q "Unknown command 'Std_Measure'" build/logs/gui-smoke.log
+          test -f "${SCREENSHOT_PATH}"
+          test -f "${SKETCH_SCREENSHOT_PATH}"
+          test -f "${VERTICAL_SLICE_PATH}"
+
+      - name: Run Classic recovery mode smoke test
+        env:
+          SOLIDFREECAD_CLASSIC_MODE: "1"
+          SOLIDFREECAD_EXPECT_CLASSIC: "1"
+        run: |
+          set -o pipefail
+          export XDG_RUNTIME_DIR="${GITHUB_WORKSPACE}/build/runtime/classic"
+          rm -rf "${XDG_RUNTIME_DIR}"
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          chmod 700 "${XDG_RUNTIME_DIR}"
+          rm -f /tmp/.X92-lock /tmp/.X11-unix/X92
+          xvfb-run -n 92 -e build/logs/xvfb-classic.log \
+            -s "-screen 0 1280x800x24" timeout 120s \
+            "${BUILD_DIR}/bin/FreeCAD" \
+            "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
+            2>&1 | tee build/logs/classic-smoke.log
+          grep -q "SOLIDFREECAD_CLASSIC_SMOKE_OK" build/logs/classic-smoke.log
+          ! grep -q "Unknown command 'Std_Measure'" build/logs/classic-smoke.log
+
+      - name: Package latest Ubuntu development build as deb
+        env:
+          SOLIDFREECAD_SOURCE_SHA: ${{ env.SOURCE_SHA }}
+          SOLIDFREECAD_SOURCE_BRANCH: ${{ env.SOURCE_BRANCH }}
+        run: bash scripts/package-deb.sh "${BUILD_DIR}" build/packages
+
+      - name: Install and test deb in clean Ubuntu 22.04
+        run: |
+          set -euo pipefail
+          rm -rf build/install-test
+          mkdir -p build/install-test
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/tests:/tests:ro" \
+            -v "${GITHUB_WORKSPACE}/build/packages:/packages:ro" \
+            -v "${GITHUB_WORKSPACE}/build/install-test:/results" \
+            ubuntu:22.04 \
+            bash -lc '
+              set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y ca-certificates software-properties-common xvfb dbus-x11
+              add-apt-repository -y universe
+              apt-get update
+              apt install -y /packages/solidfreecad-ubuntu_*.deb
+
+              test "$(command -v solidfreecad)" = "/usr/bin/solidfreecad"
+              test -x /usr/bin/solidfreecad
+              test -L /usr/bin/SolidFreeCAD
+              test -f /opt/solidfreecad/Mod/PartDesign/InitGui.py
+              test -f /opt/solidfreecad/Mod/PartDesign/WizardShaft/__init__.py
+              test -f /opt/solidfreecad/Mod/Sketcher/InitGui.py
+              test -f /opt/solidfreecad/Mod/Measure/InitGui.py
+              python3 -c "import pivy"
+              dpkg-query -W -f="\${Package} \${Version}\n" solidfreecad-ubuntu | tee /results/installed-package.txt
+
+              export QT_X11_NO_MITSHM=1
+              export XDG_RUNTIME_DIR=/tmp/solidfreecad-runtime
+              rm -rf "${XDG_RUNTIME_DIR}"
+              mkdir -p "${XDG_RUNTIME_DIR}"
+              chmod 700 "${XDG_RUNTIME_DIR}"
+
+              xvfb-run -a -e /results/xvfb-installed-workbenches.log \
+                -s "-screen 0 1280x800x24" timeout 120s \
+                env HOME=/tmp/solidfreecad-home-workbenches \
+                solidfreecad /tests/workbench_smoke.py \
+                2>&1 | tee /results/installed-workbench-smoke.log
+              grep -q "SOLIDFREECAD_WORKBENCH_SMOKE_OK" /results/installed-workbench-smoke.log
+
+              xvfb-run -a -e /results/xvfb-installed-gui.log \
+                -s "-screen 0 1920x1080x24" timeout 180s \
+                env HOME=/tmp/solidfreecad-home-gui \
+                SOLIDFREECAD_SCREENSHOT=/results/installed-modeling.png \
+                SOLIDFREECAD_SKETCH_SCREENSHOT=/results/installed-sketch.png \
+                SOLIDFREECAD_VERTICAL_SLICE=/results/installed-vertical-slice.FCStd \
+                solidfreecad /tests/gui_smoke.py \
+                2>&1 | tee /results/installed-gui-smoke.log
+              grep -q "SOLIDFREECAD_GUI_SMOKE_OK" /results/installed-gui-smoke.log
+              grep -q "SOLIDFREECAD_VERTICAL_SLICE_OK" /results/installed-gui-smoke.log
+
+              xvfb-run -a -e /results/xvfb-installed-classic.log \
+                -s "-screen 0 1280x800x24" timeout 120s \
+                env HOME=/tmp/solidfreecad-home-classic \
+                SOLIDFREECAD_CLASSIC_MODE=1 \
+                SOLIDFREECAD_EXPECT_CLASSIC=1 \
+                solidfreecad /tests/gui_smoke.py \
+                2>&1 | tee /results/installed-classic-smoke.log
+              grep -q "SOLIDFREECAD_CLASSIC_SMOKE_OK" /results/installed-classic-smoke.log
+
+              ! grep -q "No module named .pivy." /results/installed-gui-smoke.log
+              ! grep -q "Unknown command .Std_Measure." /results/installed-workbench-smoke.log /results/installed-gui-smoke.log /results/installed-classic-smoke.log
+            '
+
+      - name: Print compiler cache statistics
+        if: always()
+        run: ccache --show-stats || true
+
+      - name: Upload SolidFreeCAD deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidfreecad-ubuntu-deb
+          path: |
+            build/packages/*.deb
+            build/packages/*.sha256
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload build logs, screenshots and FCStd vertical slice
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidfreecad-ubuntu-build-results
+          path: |
+            build/logs
+            build/artifacts
+            build/install-test
+            build/freecad-build/CMakeCache.txt
+            build/freecad-build/CMakeFiles/CMakeError.log
+          if-no-files-found: ignore
