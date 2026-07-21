@@ -84,8 +84,6 @@ bool SolidPropertyManager::install(Gui::MainWindow* mainWindow)
     enhanceModelTree();
     refreshSelection();
 
-    // ComboView is restored in several deferred FreeCAD startup passes. Reapply
-    // the model-tree refinements after those passes without replacing ComboView.
     QTimer::singleShot(0, this, [this]() { enhanceModelTree(); });
     QTimer::singleShot(250, this, [this]() { enhanceModelTree(); });
     QTimer::singleShot(750, this, [this]() { enhanceModelTree(); });
@@ -378,7 +376,7 @@ void SolidPropertyManager::enhanceModelTree()
 
 App::DocumentObject* SolidPropertyManager::selectedObject() const
 {
-    const auto selection = Gui::Selection().getSelectionEx(
+    auto selection = Gui::Selection().getSelectionEx(
         nullptr,
         App::DocumentObject::getClassTypeId(),
         Gui::ResolveMode::NoResolve);
