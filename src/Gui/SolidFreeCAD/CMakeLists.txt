@@ -9,6 +9,8 @@ set(SolidFreeCADGui_SRCS
     SolidGuiManager.h
     SolidIconFactory.cpp
     SolidIconFactory.h
+    SolidPropertyManager.cpp
+    SolidPropertyManager.h
     SolidRibbonWidget.cpp
     SolidRibbonWidget.h
     SolidSketchEnhancements.cpp
