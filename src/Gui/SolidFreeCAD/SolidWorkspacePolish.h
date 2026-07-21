@@ -6,6 +6,7 @@
 
 class QLabel;
 class QToolBar;
+class QWidget;
 
 namespace Gui
 {
