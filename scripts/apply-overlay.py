@@ -58,6 +58,65 @@ SKETCH_UNSET_INSERT = (
     + "    pcSketchFacesToggle->on = Visibility.getValue();\n\n"
 )
 
+GUI_MODEL_DOCK_OLD = (
+    '        and (dock.objectName() == "Model" or dock.windowTitle() == "Modelo")\n'
+)
+GUI_MODEL_DOCK_NEW = (
+    '        and (dock.objectName() == "Model"\n'
+    '             or dock.windowTitle() in {"Modelo", "Historial del modelo"})\n'
+)
+
+GUI_POLISH_ANCHOR = '    stage("ribbon-validated")\n'
+GUI_POLISH_INSERT = GUI_POLISH_ANCHOR + '''
+
+    ribbon_pages = main_window.findChild(
+        QtWidgets.QStackedWidget, "SolidFreeCADRibbonPages"
+    )
+    context_badge = main_window.findChild(
+        QtWidgets.QLabel, "SolidFreeCADContextBadge"
+    )
+    if ribbon_pages is None or context_badge is None or context_badge.text() != "PIEZA":
+        raise RuntimeError("The polished SolidFreeCAD workspace badge is missing")
+    if ribbon_tabs.geometry().top() >= ribbon_pages.geometry().top():
+        raise RuntimeError("Ribbon tabs were not moved above the command pages")
+
+    primary_buttons = [
+        button
+        for button in ribbon.findChildren(QtWidgets.QToolButton)
+        if bool(button.property("SolidFreeCADPrimaryCommand"))
+    ]
+    if len(primary_buttons) < 4:
+        raise RuntimeError(
+            f"Too few primary modeling commands were highlighted: {len(primary_buttons)}"
+        )
+
+    workspace_icon_actions = [
+        action
+        for toolbar in ribbon.findChildren(
+            QtWidgets.QToolBar, "SolidFreeCADQuickAccess"
+        )
+        for action in toolbar.actions()
+        if bool(action.property("SolidFreeCADWorkspaceIcon"))
+    ]
+    if len(workspace_icon_actions) < 5:
+        raise RuntimeError(
+            f"Quick access icon set is incomplete: {len(workspace_icon_actions)}"
+        )
+    if any(action.icon().isNull() for action in workspace_icon_actions):
+        raise RuntimeError("A polished quick access icon is null")
+    stage(
+        f"workspace-polish-validated-primary-{len(primary_buttons)}-"
+        f"quick-icons-{len(workspace_icon_actions)}"
+    )
+'''
+
+GUI_SCREENSHOT_ANCHOR = '    stage("capture-modeling-start")\n'
+GUI_SCREENSHOT_INSERT = '''    FreeCADGui.Selection.clearSelection()
+    FreeCADGui.Selection.addSelection(active_document.Name, pad.Name)
+    process_for(0.35)
+    stage("capture-modeling-start")
+'''
+
 
 def insert_once(text: str, anchor: str, insertion: str, description: str) -> str:
     if insertion in text:
@@ -65,6 +124,14 @@ def insert_once(text: str, anchor: str, insertion: str, description: str) -> str
     if anchor not in text:
         raise RuntimeError(f"Could not find {description} anchor")
     return text.replace(anchor, insertion, 1)
+
+
+def replace_once(text: str, old: str, new: str, description: str) -> str:
+    if new in text:
+        return text
+    if old not in text:
+        raise RuntimeError(f"Could not find {description} text")
+    return text.replace(old, new, 1)
 
 
 def apply(repo_root: Path, freecad_root: Path) -> None:
@@ -75,8 +142,15 @@ def apply(repo_root: Path, freecad_root: Path) -> None:
     sketch_view_file = (
         freecad_root / "src" / "Mod" / "Sketcher" / "Gui" / "ViewProviderSketch.cpp"
     )
+    gui_smoke_file = repo_root / "tests" / "gui_smoke.py"
 
-    for required in (source_overlay, cmake_file, main_window_file, sketch_view_file):
+    for required in (
+        source_overlay,
+        cmake_file,
+        main_window_file,
+        sketch_view_file,
+        gui_smoke_file,
+    ):
         if not required.exists():
             raise FileNotFoundError(required)
 
@@ -141,6 +215,27 @@ def apply(repo_root: Path, freecad_root: Path) -> None:
         "Sketcher unset-edit profile shading",
     )
     sketch_view_file.write_text(sketch_text, encoding="utf-8")
+
+    gui_smoke_text = gui_smoke_file.read_text(encoding="utf-8")
+    gui_smoke_text = replace_once(
+        gui_smoke_text,
+        GUI_MODEL_DOCK_OLD,
+        GUI_MODEL_DOCK_NEW,
+        "polished model dock title",
+    )
+    gui_smoke_text = insert_once(
+        gui_smoke_text,
+        GUI_POLISH_ANCHOR,
+        GUI_POLISH_INSERT,
+        "workspace polish assertions",
+    )
+    gui_smoke_text = insert_once(
+        gui_smoke_text,
+        GUI_SCREENSHOT_ANCHOR,
+        GUI_SCREENSHOT_INSERT,
+        "selected feature screenshot",
+    )
+    gui_smoke_file.write_text(gui_smoke_text, encoding="utf-8")
 
     marker = freecad_root / "SOLIDFREECAD_OVERLAY_APPLIED"
     marker.write_text("SolidFreeCAD GUI overlay applied\n", encoding="utf-8")
