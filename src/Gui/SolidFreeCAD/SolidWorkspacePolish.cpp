@@ -4,10 +4,17 @@
 
 #include <QAction>
 #include <QBoxLayout>
+#include <QColor>
 #include <QDockWidget>
+#include <QIcon>
 #include <QLabel>
+#include <QPainter>
+#include <QPen>
+#include <QPixmap>
+#include <QPolygonF>
 #include <QSize>
 #include <QStackedWidget>
+#include <QStyle>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTimer>
@@ -23,6 +30,18 @@
 namespace
 {
 
+const QColor ink(QStringLiteral("#26343e"));
+const QColor blue(QStringLiteral("#2f8fc7"));
+const QColor blueDark(QStringLiteral("#1f648e"));
+const QColor orange(QStringLiteral("#f28b2c"));
+const QColor green(QStringLiteral("#35a66f"));
+const QColor yellow(QStringLiteral("#f1c84b"));
+
+QPen outline(const QColor& color = ink, qreal width = 1.5)
+{
+    return QPen(color, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+}
+
 bool isPrimaryCommand(const QString& commandName)
 {
     return commandName == QStringLiteral("PartDesign_Pad")
@@ -31,6 +50,90 @@ bool isPrimaryCommand(const QString& commandName)
         || commandName == QStringLiteral("PartDesign_Revolution")
         || commandName == QStringLiteral("Sketcher_CompDimensionTools")
         || commandName == QStringLiteral("Sketcher_CompCreateRectangles");
+}
+
+QIcon quickAccessIcon(const QString& commandName)
+{
+    const QStringList supported = {
+        QStringLiteral("Std_New"),
+        QStringLiteral("Std_Open"),
+        QStringLiteral("Std_Save"),
+        QStringLiteral("Std_Undo"),
+        QStringLiteral("Std_Redo"),
+        QStringLiteral("Std_DlgPreferences"),
+    };
+    if (!supported.contains(commandName)) {
+        return {};
+    }
+
+    QPixmap pixmap(28, 28);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    if (commandName == QStringLiteral("Std_New")) {
+        painter.setPen(outline());
+        painter.setBrush(Qt::white);
+        painter.drawRoundedRect(QRectF(5, 3, 16, 21), 1.5, 1.5);
+        painter.setPen(outline(blueDark, 1.0));
+        painter.drawLine(QPointF(8, 9), QPointF(17, 9));
+        painter.drawLine(QPointF(8, 13), QPointF(17, 13));
+        painter.setPen(outline(green, 2.0));
+        painter.drawLine(QPointF(19, 21), QPointF(26, 21));
+        painter.drawLine(QPointF(22.5, 17.5), QPointF(22.5, 24.5));
+    }
+    else if (commandName == QStringLiteral("Std_Open")) {
+        painter.setPen(outline());
+        painter.setBrush(yellow);
+        painter.drawPolygon(QPolygonF()
+                            << QPointF(3, 9) << QPointF(11, 9)
+                            << QPointF(14, 13) << QPointF(25, 13)
+                            << QPointF(23, 24) << QPointF(4, 24));
+        painter.setPen(outline(blueDark, 1.8));
+        painter.drawLine(QPointF(16, 6), QPointF(23, 11));
+        painter.drawLine(QPointF(23, 11), QPointF(19, 11));
+        painter.drawLine(QPointF(23, 11), QPointF(22, 7));
+    }
+    else if (commandName == QStringLiteral("Std_Save")) {
+        painter.setPen(outline());
+        painter.setBrush(blue);
+        painter.drawRoundedRect(QRectF(4, 4, 20, 20), 2, 2);
+        painter.setBrush(Qt::white);
+        painter.drawRect(QRectF(8, 6, 12, 6));
+        painter.drawRect(QRectF(8, 16, 13, 6));
+        painter.setBrush(orange);
+        painter.drawRect(QRectF(17, 7, 2.5, 4));
+    }
+    else if (commandName == QStringLiteral("Std_Undo")
+             || commandName == QStringLiteral("Std_Redo")) {
+        painter.save();
+        if (commandName == QStringLiteral("Std_Redo")) {
+            painter.translate(28, 0);
+            painter.scale(-1, 1);
+        }
+        painter.setPen(outline(blueDark, 2.2));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawArc(QRectF(6, 6, 18, 16), 20 * 16, 235 * 16);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(blueDark);
+        painter.drawPolygon(QPolygonF()
+                            << QPointF(5, 8) << QPointF(11, 5) << QPointF(10, 12));
+        painter.restore();
+    }
+    else if (commandName == QStringLiteral("Std_DlgPreferences")) {
+        painter.setPen(outline(blueDark, 1.8));
+        painter.drawLine(QPointF(5, 8), QPointF(23, 8));
+        painter.drawLine(QPointF(5, 14), QPointF(23, 14));
+        painter.drawLine(QPointF(5, 20), QPointF(23, 20));
+        painter.setPen(outline(orange, 1.5));
+        painter.setBrush(Qt::white);
+        painter.drawEllipse(QPointF(10, 8), 2.5, 2.5);
+        painter.drawEllipse(QPointF(18, 14), 2.5, 2.5);
+        painter.drawEllipse(QPointF(13, 20), 2.5, 2.5);
+    }
+
+    painter.end();
+    return QIcon(pixmap);
 }
 
 }  // namespace
@@ -151,6 +254,24 @@ void SolidWorkspacePolish::polishRibbon(QToolBar* ribbon)
     ensureContextBadge(shell);
     updateDocumentTitle(shell);
     stylePrimaryCommands(ribbon);
+
+    const auto quickToolbars =
+        ribbon->findChildren<QToolBar*>(QStringLiteral("SolidFreeCADQuickAccess"));
+    for (QToolBar* toolbar : quickToolbars) {
+        for (QAction* action : toolbar->actions()) {
+            if (!action) {
+                continue;
+            }
+            const QString commandName =
+                action->property("SolidFreeCADCommandName").toString();
+            const QIcon icon = quickAccessIcon(commandName);
+            if (icon.isNull()) {
+                continue;
+            }
+            action->setIcon(icon);
+            action->setProperty("SolidFreeCADWorkspaceIcon", true);
+        }
+    }
 }
 
 void SolidWorkspacePolish::ensureContextBadge(QWidget* shell)
@@ -257,17 +378,29 @@ void SolidWorkspacePolish::polishSidePanels()
     QDockWidget* modelDock = nullptr;
     const auto docks = mainWindow_->findChildren<QDockWidget*>(QString(), Qt::FindDirectChildrenOnly);
     for (QDockWidget* dock : docks) {
-        if (!dock || dock == propertyDock
-            || mainWindow_->dockWidgetArea(dock) != Qt::LeftDockWidgetArea) {
+        if (!dock || dock == propertyDock) {
             continue;
         }
+
         const QString identity =
             (dock->objectName() + QLatin1Char(' ') + dock->windowTitle()).toLower();
+        const bool detachedTaskPanel =
+            (dock->isFloating() || mainWindow_->dockWidgetArea(dock) == Qt::NoDockWidgetArea)
+            && (identity.trimmed() == QStringLiteral("tasks")
+                || identity.trimmed() == QStringLiteral("tareas")
+                || identity.contains(QStringLiteral(" task")));
+        if (detachedTaskPanel) {
+            dock->hide();
+            continue;
+        }
+
+        if (mainWindow_->dockWidgetArea(dock) != Qt::LeftDockWidgetArea) {
+            continue;
+        }
         if (dock->objectName() == QStringLiteral("Model")
             || identity.contains(QStringLiteral("modelo"))
             || identity.contains(QStringLiteral("model"))) {
             modelDock = dock;
-            break;
         }
     }
 
