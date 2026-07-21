@@ -54,9 +54,6 @@ bool isFreeCADType(App::DocumentObject* object, const char* typeName)
         return true;
     }
 
-    // Some build-tree and legacy FCStd Part Design objects expose the generic
-    // PartDesign::Feature TypeId. Their internal Name is immutable after creation,
-    // and Length is the official parameter shared by Pad/Pocket operations.
     const QString requested = QString::fromLatin1(typeName);
     const QString internalName = QString::fromUtf8(object->getNameInDocument());
     const bool hasLength = object->getPropertyByName("Length") != nullptr;
@@ -313,11 +310,8 @@ void SolidPropertyManager::enhanceModelTree()
 
 App::DocumentObject* SolidPropertyManager::selectedObject() const
 {
-    auto selection = Gui::Selection().getSelectionEx(
-        nullptr,
-        App::DocumentObject::getClassTypeId(),
-        Gui::ResolveMode::NoResolve);
-    return selection.size() == 1 ? selection.front().getObject() : nullptr;
+    const auto selection = Gui::Selection().getCompleteSelection(Gui::ResolveMode::NoResolve);
+    return selection.size() == 1 ? selection.front().pObject : nullptr;
 }
 
 QString SolidPropertyManager::featureKind(App::DocumentObject* object) const
