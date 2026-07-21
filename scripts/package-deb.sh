@@ -43,10 +43,13 @@ fi
 required_runtime_paths=(
     "Mod/PartDesign/Init.py"
     "Mod/PartDesign/InitGui.py"
+    "Mod/PartDesign/WizardShaft/__init__.py"
     "Mod/Sketcher/Init.py"
     "Mod/Sketcher/InitGui.py"
     "Mod/Part/Init.py"
     "Mod/Part/InitGui.py"
+    "Mod/Measure/Init.py"
+    "Mod/Measure/InitGui.py"
 )
 for required_path in "${required_runtime_paths[@]}"; do
     if [[ ! -f "${BUILD_DIR}/${required_path}" ]]; then
@@ -58,7 +61,8 @@ done
 for module_pattern in \
     "Mod/PartDesign/PartDesignGui*.so" \
     "Mod/Sketcher/SketcherGui*.so" \
-    "Mod/Part/PartGui*.so"; do
+    "Mod/Part/PartGui*.so" \
+    "Mod/Measure/MeasureGui*.so"; do
     if ! compgen -G "${BUILD_DIR}/${module_pattern}" >/dev/null; then
         echo "Required FreeCAD GUI module is missing: ${BUILD_DIR}/${module_pattern}" >&2
         exit 1
@@ -191,7 +195,7 @@ done < <(
         -type f \( -perm /111 -o -name '*.so' -o -name '*.so.*' \) -print0
 )
 
-for required_package in python3 python3-pyside2.qtcore python3-pyside2.qtgui python3-pyside2.qtwidgets; do
+for required_package in python3 python3-pivy python3-pyside2.qtcore python3-pyside2.qtgui python3-pyside2.qtwidgets; do
     if dpkg-query -W -f='${Status}' "${required_package}" 2>/dev/null | grep -q 'install ok installed'; then
         dependency_set["${required_package}"]=1
     fi
@@ -247,6 +251,9 @@ DEB_PATH="${OUTPUT_DIR}/${PACKAGE_NAME}_${VERSION}_${ARCHITECTURE}.deb"
 dpkg-deb --build --root-owner-group "${PACKAGE_ROOT}" "${DEB_PATH}"
 dpkg-deb --info "${DEB_PATH}"
 dpkg-deb --contents "${DEB_PATH}" >/dev/null
-sha256sum "${DEB_PATH}" | tee "${DEB_PATH}.sha256"
+(
+    cd "${OUTPUT_DIR}"
+    sha256sum "$(basename "${DEB_PATH}")" | tee "$(basename "${DEB_PATH}").sha256"
+)
 
 echo "SOLIDFREECAD_DEB_OK path=${DEB_PATH} source_sha=${SOURCE_SHA}"
