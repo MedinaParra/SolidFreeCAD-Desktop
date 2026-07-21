@@ -18,6 +18,21 @@ INSTALL_LINE = "    SolidFreeCAD::installGui(this);\n\n"
 DESTRUCTOR_ANCHOR = "MainWindow::~MainWindow()\n{\n"
 DESTRUCTOR_INSERT = DESTRUCTOR_ANCHOR + "    SolidFreeCAD::uninstallGui();\n"
 
+PROPERTY_SELECTION_ANCHOR = (
+    "    const auto selection = "
+    "Gui::Selection().getCompleteSelection(Gui::ResolveMode::NoResolve);\n"
+    "    return selection.size() == 1 ? selection.front().pObject : nullptr;\n"
+)
+PROPERTY_SELECTION_INSERT = (
+    "    const auto selection = "
+    "Gui::Selection().getCompleteSelection(Gui::ResolveMode::NoResolve);\n"
+    "    if (selection.size() != 1) {\n"
+    "        return nullptr;\n"
+    "    }\n\n"
+    "    const auto& selected = selection.front();\n"
+    "    return selected.pResolvedObject ? selected.pResolvedObject : selected.pObject;\n"
+)
+
 SKETCH_EDIT_ANCHOR = "    Workbench::enterEditMode();\n\n"
 SKETCH_EDIT_INSERT = (
     SKETCH_EDIT_ANCHOR
@@ -68,6 +83,16 @@ def apply(repo_root: Path, freecad_root: Path) -> None:
     if destination_overlay.exists():
         shutil.rmtree(destination_overlay)
     shutil.copytree(source_overlay, destination_overlay)
+
+    property_manager_file = destination_overlay / "SolidPropertyManager.cpp"
+    property_manager_text = property_manager_file.read_text(encoding="utf-8")
+    property_manager_text = insert_once(
+        property_manager_text,
+        PROPERTY_SELECTION_ANCHOR,
+        PROPERTY_SELECTION_INSERT,
+        "Property Manager resolved selection",
+    )
+    property_manager_file.write_text(property_manager_text, encoding="utf-8")
 
     cmake_text = cmake_file.read_text(encoding="utf-8")
     cmake_text = insert_once(
