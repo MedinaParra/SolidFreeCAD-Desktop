@@ -15,6 +15,8 @@ set(SolidFreeCADGui_SRCS
     SolidRibbonWidget.h
     SolidSketchEnhancements.cpp
     SolidSketchEnhancements.h
+    SolidWorkspacePolish.cpp
+    SolidWorkspacePolish.h
 )
 
 target_sources(FreeCADGui PRIVATE ${SolidFreeCADGui_SRCS})
