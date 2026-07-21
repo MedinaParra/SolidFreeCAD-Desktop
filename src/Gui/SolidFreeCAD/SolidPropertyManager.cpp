@@ -45,12 +45,41 @@ PropertyType* propertyAs(App::DocumentObject* object, const char* name)
         : nullptr;
 }
 
-bool isFreeCADType(App::DocumentObject* object, const char* typeName)
+bool hasProperty(App::DocumentObject* object, const char* name)
 {
-    return object && object->getTypeId().isDerivedFrom(Base::Type::fromName(typeName));
+    return object && object->getPropertyByName(name) != nullptr;
 }
 
-QString objectLabel(App::DocumentObject* object)
+bool isFreeCADType(App::DocumentObject* object, const char* typeName)
+{
+    if (!object) {
+        return false;
+    }
+
+    if (object->getTypeId().isDerivedFrom(Base::Type::fromName(typeName))) {
+        return true;
+    }
+
+    // FreeCAD can expose older or freshly-created Part Design operations through
+    // the generic PartDesign::Feature C++ TypeId. Their immutable internal name
+    // and official property signature remain stable in FCStd documents.
+    const QString requested = QString::fromLatin1(typeName);
+    const QString internalName = QString::fromUtf8(object->getNameInDocument());
+    const bool sketchBasedLengthFeature = hasProperty(object, "Profile")
+        && hasProperty(object, "Length")
+        && hasProperty(object, "Reversed")
+        && hasProperty(object, "Midplane");
+
+    if (requested == QStringLiteral("PartDesign::Pad")) {
+        return sketchBasedLengthFeature && internalName.startsWith(QStringLiteral("Pad"));
+    }
+    if (requested == QStringLiteral("PartDesign::Pocket")) {
+        return sketchBasedLengthFeature && internalName.startsWith(QStringLiteral("Pocket"));
+    }
+    return false;
+}
+
+QString displayLabel(App::DocumentObject* object)
 {
     if (auto* label = propertyAs<App::PropertyString>(object, "Label")) {
         return QString::fromUtf8(label->getValue());
@@ -83,9 +112,9 @@ bool SolidPropertyManager::install(Gui::MainWindow* mainWindow)
     if (!dock_) {
         buildPanel();
     }
-
     enhanceModelTree();
     refreshSelection();
+
     QTimer::singleShot(0, this, [this]() { enhanceModelTree(); });
     QTimer::singleShot(250, this, [this]() { enhanceModelTree(); });
     QTimer::singleShot(750, this, [this]() { enhanceModelTree(); });
@@ -350,9 +379,10 @@ void SolidPropertyManager::refreshSelection()
         return;
     }
 
-    objectLabel_->setText(objectLabel(object));
+    const QString label = displayLabel(object);
+    objectLabel_->setText(label);
     typeLabel_->setText(QString::fromUtf8(object->getTypeId().getName()));
-    labelEditor_->setText(objectLabel(object));
+    labelEditor_->setText(label);
 
     if (auto* length = propertyAs<App::PropertyQuantity>(object, "Length")) {
         lengthEditor_->setValue(length->getValue());
