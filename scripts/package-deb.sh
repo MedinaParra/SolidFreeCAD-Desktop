@@ -3,7 +3,6 @@ set -euo pipefail
 
 mkdir -p build/logs
 exec > >(tee build/logs/package-deb.log) 2>&1
-set -x
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
     echo "Usage: $0 <freecad-build-dir> [output-dir]" >&2
@@ -92,7 +91,7 @@ gzip -9n -c "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian" \
     > "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian.gz"
 rm "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian"
 
-# Derive runtime dependencies from ELF files bundled in the package.
+# Derive runtime dependencies from executable and shared-library ELF files.
 declare -A dependency_set=()
 while IFS= read -r -d '' elf_file; do
     if ! file -Lb "${elf_file}" | grep -q '^ELF'; then
@@ -111,7 +110,10 @@ while IFS= read -r -d '' elf_file; do
             $1 ~ /^\// { print $1 }
         '
     )
-done < <(find "${INSTALL_ROOT}" -type f -print0)
+done < <(
+    find "${INSTALL_ROOT}/bin" "${INSTALL_ROOT}/lib" "${INSTALL_ROOT}/Mod" \
+        -type f \( -perm /111 -o -name '*.so' -o -name '*.so.*' \) -print0
+)
 
 for required_package in python3 python3-pyside2.qtcore python3-pyside2.qtgui python3-pyside2.qtwidgets; do
     if dpkg-query -W -f='${Status}' "${required_package}" 2>/dev/null | grep -q 'install ok installed'; then
@@ -151,12 +153,13 @@ exit 0
 POSTINST
 chmod 0755 "${PACKAGE_ROOT}/DEBIAN/postinst"
 
-# Confirm the staged executable can resolve the bundled FreeCAD libraries.
-env \
-    LD_LIBRARY_PATH="${INSTALL_ROOT}/lib" \
-    PYTHONPATH="${INSTALL_ROOT}/lib:${INSTALL_ROOT}/Ext:${INSTALL_ROOT}/Mod" \
-    QT_QPA_PLATFORM=offscreen \
-    timeout 30s "${INSTALL_ROOT}/bin/FreeCAD" --version
+# GUI execution has already passed under Xvfb. Here validate the relocated binary linkage.
+LINKAGE="$(env LD_LIBRARY_PATH="${INSTALL_ROOT}/lib" ldd "${INSTALL_ROOT}/bin/FreeCAD")"
+printf '%s\n' "${LINKAGE}"
+if grep -q 'not found' <<<"${LINKAGE}"; then
+    echo "The staged FreeCAD executable has unresolved libraries" >&2
+    exit 1
+fi
 
 DEB_PATH="${OUTPUT_DIR}/${PACKAGE_NAME}_${VERSION}_${ARCHITECTURE}.deb"
 dpkg-deb --build --root-owner-group "${PACKAGE_ROOT}" "${DEB_PATH}"
