@@ -32,7 +32,7 @@ The existing Simulation/FEM ribbon placeholder is scheduled for removal. Inspect
 | --- | ---: | --- |
 | Reproducible FreeCAD 1.1.1 foundation | 90% | Overlay, CI, Ubuntu build, deb packaging, clean install and Classic recovery are operational. |
 | SolidFreeCAD mechanical workspace | 55% | Tabbed ribbon, command search, initial colorful icons, model history, Property Manager and contextual workspace states are implemented. Welcome, context-command and heads-up interaction layers remain. |
-| Basic Part Design workflow | 46% | Body, Sketch, Pad and Pocket are validated; the reviewed manual adds stricter requirements for sketch guidance, constraints, dimensions, status and repair. |
+| Basic Part Design workflow | 46% | Body, Sketch, Pad and Pocket are validated; the reviewed manuals add stricter requirements for sketch guidance, constraints, dimensions, status and repair. |
 | File and interchange workflow | 45% | Native New/Open/Save/Save As/Import/Export commands are exposed; recent documents, templates and STEP round-trip fixtures remain. |
 | FCStd compatibility and persistence | 42% | A Sketch -> Pad vertical slice is saved, reopened and volume-checked. Complex-workbench preservation fixtures remain. |
 | Welded structures workflow | 15% | A ribbon placeholder exists, but structural-member, trim, cut-list and weld metadata logic are not yet implemented. |
@@ -42,11 +42,11 @@ The existing Simulation/FEM ribbon placeholder is scheduled for removal. Inspect
 
 **Estimated complete product progress: 42%.**
 
-The percentage remains unchanged after the Easyworks manual review because it validates the architecture but expands the acceptance criteria. The basic mechanical-design MVP is approximately 58% complete under the stricter sketch-quality definition.
+The percentage remains unchanged after reviewing the SOLIDWORKS 2025 tutorial and the Easyworks good-practices manual because they validate the architecture but expand the acceptance criteria. The basic mechanical-design MVP is approximately 58% complete under the stricter sketch-quality definition.
 
-## Feasibility validation from the Easyworks good-practices manual
+## Feasibility validation from the reviewed manuals
 
-The reviewed workflow is technically feasible with official FreeCAD 1.1.1 components plus the SolidFreeCAD Qt/C++ interaction layer.
+The reviewed workflows are technically feasible with official FreeCAD 1.1.1 components plus the SolidFreeCAD Qt/C++ interaction layer.
 
 ### Already available in the underlying engine
 
@@ -173,7 +173,7 @@ The current objective is a reliable end-to-end workflow for ordinary mechanical 
 
 ## M4 - Professional interaction layer
 
-This milestone incorporates useful interaction concepts identified in the reviewed SOLIDWORKS tutorials without copying their artwork.
+This milestone incorporates useful interaction concepts identified in the reviewed manuals without copying their artwork.
 
 ### Welcome and document creation
 
