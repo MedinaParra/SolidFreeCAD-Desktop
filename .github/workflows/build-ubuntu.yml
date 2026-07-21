@@ -169,9 +169,22 @@ jobs:
           test -f "${SKETCH_SCREENSHOT_PATH}"
           test -f "${VERTICAL_SLICE_PATH}"
 
+      - name: Package latest Ubuntu development build as deb
+        run: bash scripts/package-deb.sh "${BUILD_DIR}" build/packages
+
       - name: Print compiler cache statistics
         if: always()
         run: ccache --show-stats || true
+
+      - name: Upload SolidFreeCAD deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidfreecad-ubuntu-deb
+          path: |
+            build/packages/*.deb
+            build/packages/*.sha256
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Upload build logs, screenshots and FCStd vertical slice
         if: always()
