@@ -77,12 +77,19 @@ process_for(0.25)
 
 def expect_feature_kind(obj: object, expected: str) -> None:
     FreeCADGui.Selection.clearSelection()
-    FreeCADGui.Selection.addSelection(obj)
-    process_for(0.25)
+    process_for(0.05)
+    FreeCADGui.Selection.addSelection(obj.Document.Name, obj.Name)
+    process_for(0.4)
     actual = str(property_panel.property("SolidFeatureKind"))
+    panel_object = str(property_panel.property("SolidObjectName"))
     if actual != expected:
+        properties = ",".join(sorted(str(name) for name in obj.PropertiesList))
         raise RuntimeError(
-            f"Property Manager expected {expected} for {obj.Name}, got {actual}"
+            "Property Manager classification mismatch: "
+            f"expected={expected} actual={actual} "
+            f"requested={obj.Document.Name}/{obj.Name} "
+            f"panel_object={panel_object} type_id={obj.TypeId} "
+            f"properties={properties}"
         )
 
 
