@@ -62,7 +62,10 @@ jobs:
 
       - name: Install official FreeCAD Ubuntu dependencies
         working-directory: ${{ env.SOURCE_DIR }}
-        run: ./package/ubuntu/install-apt-packages.sh
+        run: |
+          ./package/ubuntu/install-apt-packages.sh
+          sudo apt-get update
+          sudo apt-get install -y patchelf
 
       - name: Restore compiler cache
         id: ccache-restore
