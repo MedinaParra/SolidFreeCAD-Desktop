@@ -2,6 +2,7 @@
 
 #include <QPointer>
 #include <QString>
+#include <QStyle>
 
 #include <QObject>
 
