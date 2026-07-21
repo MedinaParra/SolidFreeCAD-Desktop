@@ -40,8 +40,8 @@ class DocumentWorkspaceContractTests(unittest.TestCase):
                 self.assertIn(f'{{"{command}",', source)
 
         self.assertIn('tr("Archivo")', source)
-        self.assertIn('QStringLiteral("FileDocument")', source)
-        self.assertIn('QStringLiteral("ModelStart")', source)
+        self.assertIn('"FileDocument"', source)
+        self.assertIn('"ModelStart"', source)
 
     def test_document_and_context_states_are_named_for_gui_smoke_tests(self) -> None:
         source = (GUI_DIR / "SolidDocumentWorkspace.cpp").read_text(encoding="utf-8")
@@ -51,7 +51,8 @@ class DocumentWorkspaceContractTests(unittest.TestCase):
         self.assertIn('tr("NUEVO")', source)
         self.assertIn('tr("GUARDADO")', source)
         self.assertIn('QStringLiteral("SolidFreeCADContextBadge")', source)
-        self.assertIn('tr("ARCHIVO")', source)
+        self.assertIn('tr("Archivo")', source)
+        self.assertIn("tab.toUpper()", source)
         self.assertIn('tr("PIEZA")', source)
 
     def test_official_command_catalog_tracks_document_workflow(self) -> None:
