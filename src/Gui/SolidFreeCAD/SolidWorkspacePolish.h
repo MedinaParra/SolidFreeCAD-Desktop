@@ -5,6 +5,7 @@
 #include <QObject>
 
 class QLabel;
+class QTimer;
 class QToolBar;
 class QWidget;
 
@@ -37,6 +38,7 @@ private:
     Gui::MainWindow* mainWindow_ = nullptr;
     QPointer<QLabel> contextBadge_;
     QPointer<QLabel> documentTitle_;
+    QPointer<QTimer> documentTimer_;
     bool installed_ = false;
 };
 
