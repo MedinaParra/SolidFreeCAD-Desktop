@@ -1,5 +1,6 @@
 #include "SolidGuiBootstrap.h"
 
+#include "SolidDocumentWorkspace.h"
 #include "SolidGuiManager.h"
 #include "SolidPropertyManager.h"
 #include "SolidSketchEnhancements.h"
@@ -21,6 +22,7 @@ std::unique_ptr<SolidGuiManager> guiManager;
 std::unique_ptr<SolidPropertyManager> propertyManager;
 std::unique_ptr<SolidSketchEnhancements> sketchEnhancements;
 std::unique_ptr<SolidWorkspacePolish> workspacePolish;
+std::unique_ptr<SolidDocumentWorkspace> documentWorkspace;
 
 bool classicModeRequestedByEnvironment()
 {
@@ -61,15 +63,20 @@ void installGui(Gui::MainWindow* mainWindow)
     if (!workspacePolish) {
         workspacePolish = std::make_unique<SolidWorkspacePolish>();
     }
+    if (!documentWorkspace) {
+        documentWorkspace = std::make_unique<SolidDocumentWorkspace>();
+    }
 
     guiManager->install(mainWindow);
     propertyManager->install(mainWindow);
     sketchEnhancements->install(mainWindow);
     workspacePolish->install(mainWindow);
+    documentWorkspace->install(mainWindow);
 }
 
 void uninstallGui()
 {
+    documentWorkspace.reset();
     workspacePolish.reset();
     sketchEnhancements.reset();
     propertyManager.reset();
