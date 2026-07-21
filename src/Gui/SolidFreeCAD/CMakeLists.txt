@@ -3,6 +3,8 @@ set(SolidFreeCADGui_SRCS
     SolidCommandBridge.h
     SolidCommandSearch.cpp
     SolidCommandSearch.h
+    SolidDocumentWorkspace.cpp
+    SolidDocumentWorkspace.h
     SolidGuiBootstrap.cpp
     SolidGuiBootstrap.h
     SolidGuiManager.cpp
