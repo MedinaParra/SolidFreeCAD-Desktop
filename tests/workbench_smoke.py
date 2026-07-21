@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 
+import FreeCAD as App
 import FreeCADGui
 from PySide import QtWidgets
 
@@ -17,6 +18,14 @@ if main_window is None:
 main_window.show()
 application.processEvents()
 
+
+def process_for(seconds: float) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        application.processEvents()
+        time.sleep(0.01)
+
+
 available = FreeCADGui.listWorkbenches()
 required = ("PartDesignWorkbench", "SketcherWorkbench")
 missing = [name for name in required if name not in available]
@@ -25,10 +34,7 @@ if missing:
 
 for workbench_name in required:
     FreeCADGui.activateWorkbench(workbench_name)
-    deadline = time.monotonic() + 1.0
-    while time.monotonic() < deadline:
-        application.processEvents()
-        time.sleep(0.01)
+    process_for(1.0)
 
     active = FreeCADGui.activeWorkbench()
     if active is None:
@@ -40,9 +46,81 @@ for workbench_name in required:
             f"Expected active workbench {workbench_name}, got {active_name}"
         )
 
+process_for(1.0)
+
+property_dock = main_window.findChild(
+    QtWidgets.QDockWidget, "SolidFreeCADPropertyManager"
+)
+property_panel = main_window.findChild(
+    QtWidgets.QWidget, "SolidFreeCADPropertyManagerWidget"
+)
+if property_dock is None or property_panel is None or not property_dock.isVisible():
+    raise RuntimeError("SolidFreeCAD Property Manager is not installed and visible")
+
+model_trees = [
+    tree
+    for tree in main_window.findChildren(QtWidgets.QTreeView)
+    if bool(tree.property("SolidFreeCADModelTree"))
+]
+if not model_trees:
+    raise RuntimeError("The official model tree was not enhanced by SolidFreeCAD")
+if not all(tree.alternatingRowColors() and tree.uniformRowHeights() for tree in model_trees):
+    raise RuntimeError("The enhanced model tree did not retain its compact history settings")
+
+from workshop_model import create_workshop_part
+
+model = create_workshop_part("SolidPropertyManagerProbe")
+App.setActiveDocument(model.document.Name)
+model.document.recompute()
+process_for(0.25)
+
+
+def expect_feature_kind(obj: object, expected: str) -> None:
+    FreeCADGui.Selection.clearSelection()
+    FreeCADGui.Selection.addSelection(obj)
+    process_for(0.25)
+    actual = str(property_panel.property("SolidFeatureKind"))
+    if actual != expected:
+        raise RuntimeError(
+            f"Property Manager expected {expected} for {obj.Name}, got {actual}"
+        )
+
+
+expect_feature_kind(model.sketch, "Sketch")
+expect_feature_kind(model.pad, "Pad")
+
+length_editor = main_window.findChild(
+    QtWidgets.QDoubleSpinBox, "SolidFreeCADLengthEditor"
+)
+apply_button = main_window.findChild(
+    QtWidgets.QPushButton, "SolidFreeCADApplyProperties"
+)
+if length_editor is None or apply_button is None:
+    raise RuntimeError("Pad Property Manager controls are missing")
+
+new_length = float(model.pad.Length.Value) + 5.0
+length_editor.setValue(new_length)
+apply_button.click()
+process_for(0.4)
+if abs(float(model.pad.Length.Value) - new_length) > 1e-9:
+    raise RuntimeError("Property Manager did not update the Pad length")
+if model.pad.Shape.isNull() or not model.pad.Shape.isValid():
+    raise RuntimeError("Property Manager produced an invalid Pad after recompute")
+
+pocket_document = App.newDocument("SolidPropertyManagerPocketProbe")
+pocket = pocket_document.addObject("PartDesign::Pocket", "PocketProbe")
+pocket.Label = "Pocket probe"
+expect_feature_kind(pocket, "Pocket")
+
+FreeCADGui.Selection.clearSelection()
+App.closeDocument(pocket_document.Name)
+App.closeDocument(model.document.Name)
+process_for(0.1)
+
 print(
     "SOLIDFREECAD_WORKBENCH_SMOKE_OK "
-    f"registered={','.join(required)}",
+    f"registered={','.join(required)} property_manager=Sketch,Pad,Pocket "
+    f"pad_length_mm={new_length}",
     flush=True,
 )
 application.quit()
