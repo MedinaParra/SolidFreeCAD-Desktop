@@ -115,11 +115,11 @@ jobs:
             --parallel 2 \
             2>&1 | tee build/logs/build-freecad-gui.log
 
-      - name: Build Part Design and Sketcher GUI modules and scripts
+      - name: Build mechanical GUI modules and scripts
         run: |
           set -o pipefail
           cmake --build "${BUILD_DIR}" \
-            --target PartDesignGui PartDesignScripts PartDesignHole SketcherScripts \
+            --target PartDesignGui PartDesignScripts PartDesignHole SketcherScripts WizardShaft MeasureGui MeasureScripts \
             --parallel 2 \
             2>&1 | tee build/logs/build-part-design-gui.log
 
@@ -146,10 +146,14 @@ jobs:
           ldd "${BUILD_DIR}/bin/FreeCAD" | grep -q "libFreeCADGui"
           find "${BUILD_DIR}/Mod/PartDesign" -maxdepth 1 -name 'PartDesignGui*' -print -quit | grep -q .
           find "${BUILD_DIR}/Mod/Sketcher" -maxdepth 1 -name 'SketcherGui*' -print -quit | grep -q .
+          find "${BUILD_DIR}/Mod/Measure" -maxdepth 1 -name 'MeasureGui*' -print -quit | grep -q .
           test -f "${BUILD_DIR}/Mod/PartDesign/Init.py"
           test -f "${BUILD_DIR}/Mod/PartDesign/InitGui.py"
+          test -f "${BUILD_DIR}/Mod/PartDesign/WizardShaft/__init__.py"
           test -f "${BUILD_DIR}/Mod/Sketcher/Init.py"
           test -f "${BUILD_DIR}/Mod/Sketcher/InitGui.py"
+          test -f "${BUILD_DIR}/Mod/Measure/Init.py"
+          test -f "${BUILD_DIR}/Mod/Measure/InitGui.py"
           find "${BUILD_DIR}" -path '*/Mod/Material/Resources/Materials/Standard/Default.FCMat' -print -quit | grep -q .
           find "${BUILD_DIR}" -path '*/Gui/Stylesheets/overlay/icons/mode.svg' -print -quit | grep -q .
           test -f "${BUILD_DIR}/Mod/Part/AttachmentEditor/__init__.py"
@@ -169,6 +173,8 @@ jobs:
             "${GITHUB_WORKSPACE}/tests/workbench_smoke.py" \
             2>&1 | tee build/logs/workbench-smoke.log
           grep -q "SOLIDFREECAD_WORKBENCH_SMOKE_OK" build/logs/workbench-smoke.log
+          ! grep -q "Unknown command 'Std_Measure'" build/logs/workbench-smoke.log
+          ! grep -q "Wizard shaft module cannot be loaded" build/logs/workbench-smoke.log
 
       - name: Run SolidFreeCAD GUI, icon and persistence smoke test
         env:
@@ -190,6 +196,8 @@ jobs:
           grep -q "SOLIDFREECAD_GUI_SMOKE_OK" build/logs/gui-smoke.log
           grep -q "SOLIDFREECAD_VERTICAL_SLICE_OK" build/logs/gui-smoke.log
           grep -q "custom-icons-validated" build/logs/gui-smoke.log
+          ! grep -q "Unknown command 'Std_Measure'" build/logs/gui-smoke.log
+          ! grep -q "Wizard shaft module cannot be loaded" build/logs/gui-smoke.log
           test -f "${SCREENSHOT_PATH}"
           test -f "${SKETCH_SCREENSHOT_PATH}"
           test -f "${VERTICAL_SLICE_PATH}"
@@ -211,6 +219,8 @@ jobs:
             "${GITHUB_WORKSPACE}/tests/gui_smoke.py" \
             2>&1 | tee build/logs/classic-smoke.log
           grep -q "SOLIDFREECAD_CLASSIC_SMOKE_OK" build/logs/classic-smoke.log
+          ! grep -q "Unknown command 'Std_Measure'" build/logs/classic-smoke.log
+          ! grep -q "Wizard shaft module cannot be loaded" build/logs/classic-smoke.log
 
       - name: Package latest Ubuntu development build as deb
         env:
@@ -241,7 +251,10 @@ jobs:
               test -x /usr/bin/solidfreecad
               test -L /usr/bin/SolidFreeCAD
               test -f /opt/solidfreecad/Mod/PartDesign/InitGui.py
+              test -f /opt/solidfreecad/Mod/PartDesign/WizardShaft/__init__.py
               test -f /opt/solidfreecad/Mod/Sketcher/InitGui.py
+              test -f /opt/solidfreecad/Mod/Measure/InitGui.py
+              python3 -c "import pivy"
               dpkg-query -W -f="\${Package} \${Version}\n" solidfreecad-ubuntu | tee /results/installed-package.txt
 
               export QT_X11_NO_MITSHM=1
@@ -276,6 +289,10 @@ jobs:
                 solidfreecad /tests/gui_smoke.py \
                 2>&1 | tee /results/installed-classic-smoke.log
               grep -q "SOLIDFREECAD_CLASSIC_SMOKE_OK" /results/installed-classic-smoke.log
+
+              ! grep -q "No module named .pivy." /results/installed-gui-smoke.log
+              ! grep -q "Unknown command .Std_Measure." /results/installed-workbench-smoke.log /results/installed-gui-smoke.log /results/installed-classic-smoke.log
+              ! grep -q "Wizard shaft module cannot be loaded" /results/installed-workbench-smoke.log /results/installed-gui-smoke.log /results/installed-classic-smoke.log
             '
 
       - name: Print compiler cache statistics
