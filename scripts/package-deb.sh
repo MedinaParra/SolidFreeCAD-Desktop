@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+mkdir -p build/logs
+exec > >(tee build/logs/package-deb.log) 2>&1
+set -x
+
 if [[ $# -lt 1 || $# -gt 2 ]]; then
     echo "Usage: $0 <freecad-build-dir> [output-dir]" >&2
     exit 2
@@ -35,9 +39,9 @@ for runtime_entry in bin lib Mod Ext Gui share data translations; do
     fi
 done
 
-# Remove files that are useful for development but not for executing SolidFreeCAD.
 find "${INSTALL_ROOT}" -type f \( -name '*.a' -o -name '*.la' -o -name '*.o' -o -name '*.obj' \) -delete
-find "${INSTALL_ROOT}" -type d \( -name '__pycache__' -o -name 'CMakeFiles' \) -prune -exec rm -rf {} +
+find "${INSTALL_ROOT}" -type d -name '__pycache__' -prune -exec rm -rf {} +
+find "${INSTALL_ROOT}" -type d -name 'CMakeFiles' -prune -exec rm -rf {} +
 
 cat > "${PACKAGE_ROOT}/usr/bin/solidfreecad" <<'LAUNCHER'
 #!/bin/sh
@@ -62,12 +66,16 @@ MimeType=application/x-extension-fcstd;model/step;model/stl;
 StartupNotify=true
 DESKTOP
 
+BRANCH_NAME="$(git branch --show-current)"
+if [[ -z "${BRANCH_NAME}" ]]; then
+    BRANCH_NAME="agent/bootstrap-freecad-1.1.1"
+fi
 cat > "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian" <<EOF
 SolidFreeCAD Ubuntu development package
 ========================================
 
 This package contains the latest validated development build from commit
-$(git rev-parse HEAD) on branch $(git branch --show-current).
+$(git rev-parse HEAD) on branch ${BRANCH_NAME}.
 
 Launch it from the application menu or run:
 
@@ -84,7 +92,7 @@ gzip -9n -c "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian" \
     > "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian.gz"
 rm "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian"
 
-# Derive runtime package dependencies from every ELF file included in the package.
+# Derive runtime dependencies from ELF files bundled in the package.
 declare -A dependency_set=()
 while IFS= read -r -d '' elf_file; do
     if ! file -Lb "${elf_file}" | grep -q '^ELF'; then
@@ -93,7 +101,7 @@ while IFS= read -r -d '' elf_file; do
     while IFS= read -r library_path; do
         [[ -n "${library_path}" && -e "${library_path}" ]] || continue
         resolved_path="$(readlink -f "${library_path}")"
-        owner_package="$(dpkg-query -S "${resolved_path}" 2>/dev/null | head -n 1 | cut -d: -f1 || true)"
+        owner_package="$(dpkg-query -S "${resolved_path}" 2>/dev/null | head -n 1 | sed 's/: .*//' || true)"
         if [[ -n "${owner_package}" && "${owner_package}" != *-dev ]]; then
             dependency_set["${owner_package}"]=1
         fi
@@ -111,7 +119,7 @@ for required_package in python3 python3-pyside2.qtcore python3-pyside2.qtgui pyt
     fi
 done
 
-DEPENDENCIES="$(printf '%s\n' "${!dependency_set[@]}" | LC_ALL=C sort | paste -sd ', ' -)"
+DEPENDENCIES="$(printf '%s\n' "${!dependency_set[@]}" | LC_ALL=C sort | paste -sd, - | sed 's/,/, /g')"
 if [[ -z "${DEPENDENCIES}" ]]; then
     DEPENDENCIES="libc6, libstdc++6, python3"
 fi
@@ -143,7 +151,7 @@ exit 0
 POSTINST
 chmod 0755 "${PACKAGE_ROOT}/DEBIAN/postinst"
 
-# Confirm the staged executable can resolve its bundled FreeCAD libraries.
+# Confirm the staged executable can resolve the bundled FreeCAD libraries.
 env \
     LD_LIBRARY_PATH="${INSTALL_ROOT}/lib" \
     PYTHONPATH="${INSTALL_ROOT}/lib:${INSTALL_ROOT}/Ext:${INSTALL_ROOT}/Mod" \
@@ -153,6 +161,7 @@ env \
 DEB_PATH="${OUTPUT_DIR}/${PACKAGE_NAME}_${VERSION}_${ARCHITECTURE}.deb"
 dpkg-deb --build --root-owner-group "${PACKAGE_ROOT}" "${DEB_PATH}"
 dpkg-deb --info "${DEB_PATH}"
+dpkg-deb --contents "${DEB_PATH}" >/dev/null
 sha256sum "${DEB_PATH}" | tee "${DEB_PATH}.sha256"
 
 echo "SOLIDFREECAD_DEB_OK path=${DEB_PATH}"
