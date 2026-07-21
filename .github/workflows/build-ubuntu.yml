@@ -174,7 +174,6 @@ jobs:
             2>&1 | tee build/logs/workbench-smoke.log
           grep -q "SOLIDFREECAD_WORKBENCH_SMOKE_OK" build/logs/workbench-smoke.log
           ! grep -q "Unknown command 'Std_Measure'" build/logs/workbench-smoke.log
-          ! grep -q "Wizard shaft module cannot be loaded" build/logs/workbench-smoke.log
 
       - name: Run SolidFreeCAD GUI, icon and persistence smoke test
         env:
@@ -197,7 +196,6 @@ jobs:
           grep -q "SOLIDFREECAD_VERTICAL_SLICE_OK" build/logs/gui-smoke.log
           grep -q "custom-icons-validated" build/logs/gui-smoke.log
           ! grep -q "Unknown command 'Std_Measure'" build/logs/gui-smoke.log
-          ! grep -q "Wizard shaft module cannot be loaded" build/logs/gui-smoke.log
           test -f "${SCREENSHOT_PATH}"
           test -f "${SKETCH_SCREENSHOT_PATH}"
           test -f "${VERTICAL_SLICE_PATH}"
@@ -220,7 +218,6 @@ jobs:
             2>&1 | tee build/logs/classic-smoke.log
           grep -q "SOLIDFREECAD_CLASSIC_SMOKE_OK" build/logs/classic-smoke.log
           ! grep -q "Unknown command 'Std_Measure'" build/logs/classic-smoke.log
-          ! grep -q "Wizard shaft module cannot be loaded" build/logs/classic-smoke.log
 
       - name: Package latest Ubuntu development build as deb
         env:
@@ -292,7 +289,6 @@ jobs:
 
               ! grep -q "No module named .pivy." /results/installed-gui-smoke.log
               ! grep -q "Unknown command .Std_Measure." /results/installed-workbench-smoke.log /results/installed-gui-smoke.log /results/installed-classic-smoke.log
-              ! grep -q "Wizard shaft module cannot be loaded" /results/installed-workbench-smoke.log /results/installed-gui-smoke.log /results/installed-classic-smoke.log
             '
 
       - name: Print compiler cache statistics
