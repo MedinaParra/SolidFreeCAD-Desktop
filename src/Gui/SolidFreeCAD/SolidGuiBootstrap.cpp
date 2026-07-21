@@ -3,6 +3,7 @@
 #include "SolidGuiManager.h"
 #include "SolidPropertyManager.h"
 #include "SolidSketchEnhancements.h"
+#include "SolidWorkspacePolish.h"
 
 #include <memory>
 #include <string>
@@ -19,6 +20,7 @@ namespace
 std::unique_ptr<SolidGuiManager> guiManager;
 std::unique_ptr<SolidPropertyManager> propertyManager;
 std::unique_ptr<SolidSketchEnhancements> sketchEnhancements;
+std::unique_ptr<SolidWorkspacePolish> workspacePolish;
 
 bool classicModeRequestedByEnvironment()
 {
@@ -56,14 +58,19 @@ void installGui(Gui::MainWindow* mainWindow)
     if (!sketchEnhancements) {
         sketchEnhancements = std::make_unique<SolidSketchEnhancements>();
     }
+    if (!workspacePolish) {
+        workspacePolish = std::make_unique<SolidWorkspacePolish>();
+    }
 
     guiManager->install(mainWindow);
     propertyManager->install(mainWindow);
     sketchEnhancements->install(mainWindow);
+    workspacePolish->install(mainWindow);
 }
 
 void uninstallGui()
 {
+    workspacePolish.reset();
     sketchEnhancements.reset();
     propertyManager.reset();
     guiManager.reset();
