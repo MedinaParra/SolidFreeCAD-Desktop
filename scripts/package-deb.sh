@@ -27,6 +27,10 @@ if [[ ! "${SOURCE_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
     echo "Invalid source commit SHA: ${SOURCE_SHA}" >&2
     exit 1
 fi
+if ! command -v patchelf >/dev/null 2>&1; then
+    echo "patchelf is required to remove non-relocatable build RUNPATH entries" >&2
+    exit 1
+fi
 if [[ ! -x "${BUILD_DIR}/bin/FreeCAD" ]]; then
     echo "FreeCAD executable not found: ${BUILD_DIR}/bin/FreeCAD" >&2
     exit 1
@@ -80,6 +84,38 @@ find "${INSTALL_ROOT}" -type d -name 'CMakeFiles' -prune -exec rm -rf {} +
 for required_path in "${required_runtime_paths[@]}"; do
     test -f "${INSTALL_ROOT}/${required_path}"
 done
+
+# FreeCAD build-tree modules depend on sibling module libraries and carry absolute
+# GitHub runner RUNPATH entries. Expose every packaged module library from the
+# private lib directory and remove those non-relocatable paths.
+while IFS= read -r -d '' module_library; do
+    library_name="$(basename "${module_library}")"
+    library_link="${INSTALL_ROOT}/lib/${library_name}"
+    relative_target="$(realpath --relative-to="${INSTALL_ROOT}/lib" "${module_library}")"
+
+    if [[ -e "${library_link}" || -L "${library_link}" ]]; then
+        if [[ "$(readlink -f "${library_link}")" != "$(readlink -f "${module_library}")" ]]; then
+            echo "Conflicting packaged module library name: ${library_name}" >&2
+            exit 1
+        fi
+        continue
+    fi
+
+    ln -s "${relative_target}" "${library_link}"
+done < <(find "${INSTALL_ROOT}/Mod" -type f \( -name '*.so' -o -name '*.so.*' \) -print0)
+
+while IFS= read -r -d '' elf_file; do
+    if file -Lb "${elf_file}" | grep -q '^ELF'; then
+        patchelf --remove-rpath "${elf_file}"
+        if [[ -n "$(patchelf --print-rpath "${elf_file}")" ]]; then
+            echo "Could not remove RUNPATH from ${elf_file}" >&2
+            exit 1
+        fi
+    fi
+done < <(
+    find "${INSTALL_ROOT}/bin" "${INSTALL_ROOT}/lib" "${INSTALL_ROOT}/Mod" \
+        -type f \( -perm /111 -o -name '*.so' -o -name '*.so.*' \) -print0
+)
 
 cat > "${PACKAGE_ROOT}/usr/bin/solidfreecad" <<'LAUNCHER'
 #!/bin/sh
@@ -137,6 +173,9 @@ while IFS= read -r -d '' elf_file; do
     while IFS= read -r library_path; do
         [[ -n "${library_path}" && -e "${library_path}" ]] || continue
         resolved_path="$(readlink -f "${library_path}")"
+        if [[ "${resolved_path}" == "${INSTALL_ROOT}/"* ]]; then
+            continue
+        fi
         owner_package="$(dpkg-query -S "${resolved_path}" 2>/dev/null | head -n 1 | sed 's/: .*//' || true)"
         if [[ -n "${owner_package}" && "${owner_package}" != *-dev ]]; then
             dependency_set["${owner_package}"]=1
@@ -190,7 +229,8 @@ exit 0
 POSTINST
 chmod 0755 "${PACKAGE_ROOT}/DEBIAN/postinst"
 
-# Validate linkage from the relocated package tree, including loadable modules.
+# Validate linkage after RUNPATH removal, using only packaged private libraries
+# plus the clean runner's system libraries.
 while IFS= read -r -d '' elf_file; do
     linkage="$(env LD_LIBRARY_PATH="${INSTALL_ROOT}/lib" ldd "${elf_file}" 2>/dev/null || true)"
     if grep -q 'not found' <<<"${linkage}"; then
