@@ -13,10 +13,20 @@ BUILD_DIR="$(realpath "$1")"
 OUTPUT_DIR="$(realpath -m "${2:-build/packages}")"
 PACKAGE_NAME="solidfreecad-ubuntu"
 ARCHITECTURE="amd64"
-VERSION="0.1.0+git$(git rev-parse --short=12 HEAD)"
+SOURCE_SHA="${SOLIDFREECAD_SOURCE_SHA:-$(git rev-parse HEAD)}"
+SOURCE_BRANCH="${SOLIDFREECAD_SOURCE_BRANCH:-$(git branch --show-current)}"
+SOURCE_SHA_SHORT="${SOURCE_SHA:0:12}"
+VERSION="0.1.0+git${SOURCE_SHA_SHORT}"
 PACKAGE_ROOT="$(realpath -m build/deb-root)"
 INSTALL_ROOT="${PACKAGE_ROOT}/opt/solidfreecad"
 
+if [[ -z "${SOURCE_BRANCH}" ]]; then
+    SOURCE_BRANCH="agent/bootstrap-freecad-1.1.1"
+fi
+if [[ ! "${SOURCE_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "Invalid source commit SHA: ${SOURCE_SHA}" >&2
+    exit 1
+fi
 if [[ ! -x "${BUILD_DIR}/bin/FreeCAD" ]]; then
     echo "FreeCAD executable not found: ${BUILD_DIR}/bin/FreeCAD" >&2
     exit 1
@@ -25,6 +35,31 @@ if [[ ! -f "${BUILD_DIR}/lib/libFreeCADGui.so" ]]; then
     echo "libFreeCADGui.so not found in ${BUILD_DIR}/lib" >&2
     exit 1
 fi
+
+required_runtime_paths=(
+    "Mod/PartDesign/Init.py"
+    "Mod/PartDesign/InitGui.py"
+    "Mod/Sketcher/Init.py"
+    "Mod/Sketcher/InitGui.py"
+    "Mod/Part/Init.py"
+    "Mod/Part/InitGui.py"
+)
+for required_path in "${required_runtime_paths[@]}"; do
+    if [[ ! -f "${BUILD_DIR}/${required_path}" ]]; then
+        echo "Required FreeCAD runtime resource is missing: ${BUILD_DIR}/${required_path}" >&2
+        exit 1
+    fi
+done
+
+for module_pattern in \
+    "Mod/PartDesign/PartDesignGui*.so" \
+    "Mod/Sketcher/SketcherGui*.so" \
+    "Mod/Part/PartGui*.so"; do
+    if ! compgen -G "${BUILD_DIR}/${module_pattern}" >/dev/null; then
+        echo "Required FreeCAD GUI module is missing: ${BUILD_DIR}/${module_pattern}" >&2
+        exit 1
+    fi
+done
 
 rm -rf "${PACKAGE_ROOT}"
 mkdir -p "${INSTALL_ROOT}" "${PACKAGE_ROOT}/DEBIAN" "${PACKAGE_ROOT}/usr/bin" \
@@ -41,6 +76,10 @@ done
 find "${INSTALL_ROOT}" -type f \( -name '*.a' -o -name '*.la' -o -name '*.o' -o -name '*.obj' \) -delete
 find "${INSTALL_ROOT}" -type d -name '__pycache__' -prune -exec rm -rf {} +
 find "${INSTALL_ROOT}" -type d -name 'CMakeFiles' -prune -exec rm -rf {} +
+
+for required_path in "${required_runtime_paths[@]}"; do
+    test -f "${INSTALL_ROOT}/${required_path}"
+done
 
 cat > "${PACKAGE_ROOT}/usr/bin/solidfreecad" <<'LAUNCHER'
 #!/bin/sh
@@ -59,22 +98,20 @@ Type=Application
 Name=SolidFreeCAD
 Comment=Mechanical CAD interface built on FreeCAD 1.1.1
 Exec=solidfreecad %F
+Icon=applications-engineering
 Terminal=false
 Categories=Graphics;Engineering;Science;
 MimeType=application/x-extension-fcstd;model/step;model/stl;
 StartupNotify=true
+StartupWMClass=FreeCAD
 DESKTOP
 
-BRANCH_NAME="$(git branch --show-current)"
-if [[ -z "${BRANCH_NAME}" ]]; then
-    BRANCH_NAME="agent/bootstrap-freecad-1.1.1"
-fi
 cat > "${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}/README.Debian" <<EOF
 SolidFreeCAD Ubuntu development package
 ========================================
 
 This package contains the latest validated development build from commit
-$(git rev-parse HEAD) on branch ${BRANCH_NAME}.
+${SOURCE_SHA} on branch ${SOURCE_BRANCH}.
 
 Launch it from the application menu or run:
 
@@ -105,7 +142,7 @@ while IFS= read -r -d '' elf_file; do
             dependency_set["${owner_package}"]=1
         fi
     done < <(
-        ldd "${elf_file}" 2>/dev/null | awk '
+        env LD_LIBRARY_PATH="${INSTALL_ROOT}/lib" ldd "${elf_file}" 2>/dev/null | awk '
             $2 == "=>" && $3 ~ /^\// { print $3 }
             $1 ~ /^\// { print $1 }
         '
@@ -153,13 +190,18 @@ exit 0
 POSTINST
 chmod 0755 "${PACKAGE_ROOT}/DEBIAN/postinst"
 
-# GUI execution has already passed under Xvfb. Here validate the relocated binary linkage.
-LINKAGE="$(env LD_LIBRARY_PATH="${INSTALL_ROOT}/lib" ldd "${INSTALL_ROOT}/bin/FreeCAD")"
-printf '%s\n' "${LINKAGE}"
-if grep -q 'not found' <<<"${LINKAGE}"; then
-    echo "The staged FreeCAD executable has unresolved libraries" >&2
-    exit 1
-fi
+# Validate linkage from the relocated package tree, including loadable modules.
+while IFS= read -r -d '' elf_file; do
+    linkage="$(env LD_LIBRARY_PATH="${INSTALL_ROOT}/lib" ldd "${elf_file}" 2>/dev/null || true)"
+    if grep -q 'not found' <<<"${linkage}"; then
+        printf '%s\n' "${linkage}"
+        echo "Unresolved library in staged package file: ${elf_file}" >&2
+        exit 1
+    fi
+done < <(
+    find "${INSTALL_ROOT}/bin" "${INSTALL_ROOT}/lib" "${INSTALL_ROOT}/Mod" \
+        -type f \( -perm /111 -o -name '*.so' -o -name '*.so.*' \) -print0
+)
 
 DEB_PATH="${OUTPUT_DIR}/${PACKAGE_NAME}_${VERSION}_${ARCHITECTURE}.deb"
 dpkg-deb --build --root-owner-group "${PACKAGE_ROOT}" "${DEB_PATH}"
@@ -167,4 +209,4 @@ dpkg-deb --info "${DEB_PATH}"
 dpkg-deb --contents "${DEB_PATH}" >/dev/null
 sha256sum "${DEB_PATH}" | tee "${DEB_PATH}.sha256"
 
-echo "SOLIDFREECAD_DEB_OK path=${DEB_PATH}"
+echo "SOLIDFREECAD_DEB_OK path=${DEB_PATH} source_sha=${SOURCE_SHA}"
