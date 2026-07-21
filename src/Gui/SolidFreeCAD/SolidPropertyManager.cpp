@@ -45,36 +45,26 @@ PropertyType* propertyAs(App::DocumentObject* object, const char* name)
         : nullptr;
 }
 
-bool hasProperty(App::DocumentObject* object, const char* name)
-{
-    return object && object->getPropertyByName(name) != nullptr;
-}
-
 bool isFreeCADType(App::DocumentObject* object, const char* typeName)
 {
     if (!object) {
         return false;
     }
-
     if (object->getTypeId().isDerivedFrom(Base::Type::fromName(typeName))) {
         return true;
     }
 
-    // FreeCAD can expose older or freshly-created Part Design operations through
-    // the generic PartDesign::Feature C++ TypeId. Their immutable internal name
-    // and official property signature remain stable in FCStd documents.
+    // Some build-tree and legacy FCStd Part Design objects expose the generic
+    // PartDesign::Feature TypeId. Their internal Name is immutable after creation,
+    // and Length is the official parameter shared by Pad/Pocket operations.
     const QString requested = QString::fromLatin1(typeName);
     const QString internalName = QString::fromUtf8(object->getNameInDocument());
-    const bool sketchBasedLengthFeature = hasProperty(object, "Profile")
-        && hasProperty(object, "Length")
-        && hasProperty(object, "Reversed")
-        && hasProperty(object, "Midplane");
-
+    const bool hasLength = object->getPropertyByName("Length") != nullptr;
     if (requested == QStringLiteral("PartDesign::Pad")) {
-        return sketchBasedLengthFeature && internalName.startsWith(QStringLiteral("Pad"));
+        return hasLength && internalName.startsWith(QStringLiteral("Pad"));
     }
     if (requested == QStringLiteral("PartDesign::Pocket")) {
-        return sketchBasedLengthFeature && internalName.startsWith(QStringLiteral("Pocket"));
+        return hasLength && internalName.startsWith(QStringLiteral("Pocket"));
     }
     return false;
 }
@@ -107,14 +97,12 @@ bool SolidPropertyManager::install(Gui::MainWindow* mainWindow)
     if (!mainWindow) {
         return false;
     }
-
     mainWindow_ = mainWindow;
     if (!dock_) {
         buildPanel();
     }
     enhanceModelTree();
     refreshSelection();
-
     QTimer::singleShot(0, this, [this]() { enhanceModelTree(); });
     QTimer::singleShot(250, this, [this]() { enhanceModelTree(); });
     QTimer::singleShot(750, this, [this]() { enhanceModelTree(); });
@@ -129,7 +117,6 @@ void SolidPropertyManager::uninstall()
         }
         dock_->deleteLater();
     }
-
     dock_.clear();
     modelDock_.clear();
     panel_.clear();
@@ -176,7 +163,6 @@ void SolidPropertyManager::buildPanel()
     panel_ = new QWidget(dock_);
     panel_->setObjectName(QStringLiteral("SolidFreeCADPropertyManagerWidget"));
     panel_->setProperty("SolidFeatureKind", QStringLiteral("None"));
-
     auto* outer = new QVBoxLayout(panel_);
     outer->setContentsMargins(8, 8, 8, 8);
     outer->setSpacing(7);
@@ -261,7 +247,6 @@ void SolidPropertyManager::buildPanel()
         QLabel#SolidFreeCADPropertyStatus[error="true"] { color: #b3261e; font-weight: 600; }
         QLabel#SolidFreeCADPropertyStatus[error="false"] { color: #2e6d43; }
         QGroupBox { background: #ffffff; border: 1px solid #c8cdd1; margin-top: 8px; font-weight: 600; }
-        QGroupBox::title { subcontrol-origin: margin; left: 7px; padding: 0 3px; }
         QLineEdit, QDoubleSpinBox { min-height: 24px; background: #ffffff; border: 1px solid #aeb6bc; padding: 2px 4px; }
         QPushButton { min-height: 25px; padding: 3px 10px; }
         QPushButton#SolidFreeCADApplyProperties { font-weight: 700; }
@@ -277,7 +262,6 @@ void SolidPropertyManager::enhanceModelTree()
     if (!mainWindow_) {
         return;
     }
-
     auto* manager = Gui::DockWindowManager::instance();
     QWidget* comboView = manager ? manager->findRegisteredDockWindow("Std_ComboView") : nullptr;
     QDockWidget* modelDock = comboView
@@ -290,7 +274,6 @@ void SolidPropertyManager::enhanceModelTree()
     modelDock_ = modelDock;
     modelDock_->setProperty("SolidFreeCADEnhancedModelManager", true);
     modelDock_->setMinimumWidth(286);
-
     for (QTreeView* tree : comboView->findChildren<QTreeView*>()) {
         tree->setProperty("SolidFreeCADModelTree", true);
         tree->setAlternatingRowColors(true);
@@ -312,7 +295,6 @@ void SolidPropertyManager::enhanceModelTree()
             tree->header()->setStretchLastSection(true);
         }
     }
-
     for (QTabWidget* tabs : comboView->findChildren<QTabWidget*>()) {
         if (tabs->count() >= 2) {
             tabs->setDocumentMode(true);
@@ -321,7 +303,6 @@ void SolidPropertyManager::enhanceModelTree()
             break;
         }
     }
-
     if (dock_ && !splitApplied_ && mainWindow_->dockWidgetArea(modelDock_) != Qt::NoDockWidgetArea) {
         mainWindow_->addDockWidget(Qt::LeftDockWidgetArea, dock_);
         mainWindow_->splitDockWidget(modelDock_, dock_, Qt::Vertical);
@@ -358,7 +339,6 @@ void SolidPropertyManager::refreshSelection()
     if (!panel_) {
         return;
     }
-
     App::DocumentObject* object = selectedObject();
     const QString kind = featureKind(object);
     panel_->setProperty("SolidFeatureKind", kind);
@@ -383,7 +363,6 @@ void SolidPropertyManager::refreshSelection()
     objectLabel_->setText(label);
     typeLabel_->setText(QString::fromUtf8(object->getTypeId().getName()));
     labelEditor_->setText(label);
-
     if (auto* length = propertyAs<App::PropertyQuantity>(object, "Length")) {
         lengthEditor_->setValue(length->getValue());
     }
@@ -406,7 +385,6 @@ void SolidPropertyManager::refreshSelection()
     else {
         summaryLabel_->setText(tr("Este tipo continúa usando el editor de propiedades oficial de FreeCAD."));
     }
-
     setFeatureControls(kind);
     setStatus(tr("Listo"));
 }
@@ -416,7 +394,6 @@ void SolidPropertyManager::setFeatureControls(const QString& kind)
     const bool sketch = kind == QStringLiteral("Sketch");
     const bool lengthFeature = kind == QStringLiteral("Pad") || kind == QStringLiteral("Pocket");
     const bool supported = sketch || lengthFeature;
-
     lengthCaption_->setVisible(lengthFeature);
     lengthEditor_->setVisible(lengthFeature);
     reversedEditor_->setVisible(lengthFeature);
@@ -444,7 +421,6 @@ void SolidPropertyManager::applyChanges()
     try {
         document->openTransaction("SolidFreeCAD Property Manager");
         transactionOpen = true;
-
         if (auto* label = propertyAs<App::PropertyString>(object, "Label")) {
             const QByteArray desired = labelEditor_->text().trimmed().toUtf8();
             if (desired != QByteArray(label->getValue())) {
@@ -452,7 +428,6 @@ void SolidPropertyManager::applyChanges()
                 changed = true;
             }
         }
-
         if (kind == QStringLiteral("Pad") || kind == QStringLiteral("Pocket")) {
             if (auto* length = propertyAs<App::PropertyQuantity>(object, "Length")) {
                 if (std::abs(length->getValue() - lengthEditor_->value()) > 1e-9) {
@@ -473,7 +448,6 @@ void SolidPropertyManager::applyChanges()
                 }
             }
         }
-
         if (changed) {
             document->recompute();
             document->commitTransaction();
