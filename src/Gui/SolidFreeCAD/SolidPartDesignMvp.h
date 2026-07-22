@@ -4,6 +4,8 @@
 #include <QPointer>
 #include <QString>
 
+#include <boost/signals2/connection.hpp>
+
 #include <Gui/Selection/Selection.h>
 
 class QCheckBox;
@@ -11,6 +13,7 @@ class QDoubleSpinBox;
 class QGroupBox;
 class QLabel;
 class QPushButton;
+class QTimer;
 class QWidget;
 
 namespace App
@@ -60,6 +63,8 @@ private:
     QPointer<QLabel> referenceLabel_;
     QPointer<QPushButton> applyButton_;
     QPointer<QLabel> statusLabel_;
+    QPointer<QTimer> scopeTimer_;
+    boost::signals2::connection commandChangedConnection_;
     bool installed_ = false;
 };
 
