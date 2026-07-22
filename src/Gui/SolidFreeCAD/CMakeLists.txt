@@ -11,6 +11,8 @@ set(SolidFreeCADGui_SRCS
     SolidGuiManager.h
     SolidIconFactory.cpp
     SolidIconFactory.h
+    SolidPartDesignMvp.cpp
+    SolidPartDesignMvp.h
     SolidPropertyManager.cpp
     SolidPropertyManager.h
     SolidRibbonWidget.cpp
