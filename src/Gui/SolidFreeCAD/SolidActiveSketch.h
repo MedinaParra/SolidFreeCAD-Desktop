@@ -41,6 +41,7 @@ private:
     void ensureGuidancePanel();
     void configureNewSketchCommand();
     void discoverDockWidgets();
+    void suppressTaskDockOutsideEdit();
     void updateConfirmationCorner(bool editing, App::DocumentObject* sketch);
     void updateGuidance(bool editing, App::DocumentObject* sketch);
     void updateTaskPanel(bool editing);
@@ -59,6 +60,8 @@ private:
     QPointer<QWidget> compactTaskTitleBar_;
     bool installed_ = false;
     bool previousEditing_ = false;
+    bool currentEditing_ = false;
+    bool taskDockSignalsConnected_ = false;
     bool preferencesApplied_ = false;
     bool previousLeaveSketchWithEscape_ = true;
     bool previousForceOrtho_ = false;
