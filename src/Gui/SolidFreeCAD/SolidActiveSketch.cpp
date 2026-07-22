@@ -7,10 +7,11 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QList>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QStyle>
 #include <QTabBar>
-#include <QTabWidget>
 #include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -22,6 +23,7 @@
 #include <Gui/Application.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
+#include <Gui/DockWindowManager.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
@@ -68,9 +70,16 @@ void SolidActiveSketch::uninstall()
         refreshTimer_->stop();
         refreshTimer_->deleteLater();
     }
-    if (modelTaskTabs_ && modelTaskTabs_->tabBar()) {
-        modelTaskTabs_->tabBar()->show();
-        modelTaskTabs_->setCurrentIndex(0);
+    if (taskDock_) {
+        taskDock_->hide();
+        taskDock_->setProperty("SolidFreeCADTaskDockActive", false);
+        taskDock_->setTitleBarWidget(nullptr);
+    }
+    if (propertyDock_) {
+        propertyDock_->show();
+    }
+    if (modelDock_) {
+        modelDock_->show();
     }
     if (confirmationCorner_) {
         confirmationCorner_->deleteLater();
@@ -78,13 +87,19 @@ void SolidActiveSketch::uninstall()
     if (guidanceFrame_) {
         guidanceFrame_->deleteLater();
     }
+    if (compactTaskTitleBar_) {
+        compactTaskTitleBar_->deleteLater();
+    }
     restorePreferences();
     refreshTimer_.clear();
     confirmationCorner_.clear();
     guidanceFrame_.clear();
     guidanceTitle_.clear();
     guidanceText_.clear();
-    modelTaskTabs_.clear();
+    taskDock_.clear();
+    propertyDock_.clear();
+    modelDock_.clear();
+    compactTaskTitleBar_.clear();
     mainWindow_ = nullptr;
     previousEditing_ = false;
     installed_ = false;
@@ -168,6 +183,7 @@ void SolidActiveSketch::refresh()
     ensureConfirmationCorner();
     ensureGuidancePanel();
     configureNewSketchCommand();
+    discoverDockWidgets();
 
     App::DocumentObject* sketch = nullptr;
     const bool editing = activeSketch(&sketch);
@@ -319,6 +335,34 @@ void SolidActiveSketch::configureNewSketchCommand()
     }
 }
 
+void SolidActiveSketch::discoverDockWidgets()
+{
+    if (!mainWindow_) {
+        return;
+    }
+    auto* manager = Gui::DockWindowManager::instance();
+    if (!taskDock_ && manager) {
+        QWidget* taskView = manager->getDockWindow("Tasks");
+        taskDock_ = taskView ? qobject_cast<QDockWidget*>(taskView->parentWidget()) : nullptr;
+    }
+    if (!modelDock_ && manager) {
+        QWidget* modelView = manager->getDockWindow("Model");
+        modelDock_ = modelView ? qobject_cast<QDockWidget*>(modelView->parentWidget()) : nullptr;
+    }
+    if (!propertyDock_) {
+        propertyDock_ = mainWindow_->findChild<QDockWidget*>(
+            QStringLiteral("SolidFreeCADPropertyManager")
+        );
+    }
+    if (taskDock_ && !compactTaskTitleBar_) {
+        compactTaskTitleBar_ = new QWidget(taskDock_);
+        compactTaskTitleBar_->setObjectName(QStringLiteral("SolidFreeCADCompactTaskTitleBar"));
+        compactTaskTitleBar_->setFixedHeight(1);
+        compactTaskTitleBar_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        taskDock_->setTitleBarWidget(compactTaskTitleBar_);
+    }
+}
+
 void SolidActiveSketch::updateConfirmationCorner(bool editing, App::DocumentObject* sketch)
 {
     if (!confirmationCorner_) {
@@ -373,42 +417,50 @@ void SolidActiveSketch::updateGuidance(bool editing, App::DocumentObject* sketch
 
 void SolidActiveSketch::updateTaskPanel(bool editing)
 {
-    if (!mainWindow_) {
+    discoverDockWidgets();
+    if (!mainWindow_ || !taskDock_) {
         return;
     }
-    if (!modelTaskTabs_) {
-        const auto docks = mainWindow_->findChildren<QDockWidget*>();
-        for (QDockWidget* dock : docks) {
-            if (!dock || mainWindow_->dockWidgetArea(dock) != Qt::LeftDockWidgetArea) {
-                continue;
-            }
-            const QString identity =
-                (dock->objectName() + QLatin1Char(' ') + dock->windowTitle()).toLower();
-            if (!identity.contains(QStringLiteral("model"))
-                && !identity.contains(QStringLiteral("modelo"))
-                && !identity.contains(QStringLiteral("historial"))) {
-                continue;
-            }
-            for (QTabWidget* candidate : dock->findChildren<QTabWidget*>()) {
-                if (candidate && candidate->count() >= 2) {
-                    modelTaskTabs_ = candidate;
-                    break;
-                }
-            }
-            if (modelTaskTabs_) {
-                break;
-            }
+
+    taskDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    taskDock_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    taskDock_->setMinimumWidth(300);
+    taskDock_->setMaximumWidth(520);
+    taskDock_->setProperty("SolidFreeCADTaskDockActive", editing);
+
+    if (editing) {
+        mainWindow_->addDockWidget(Qt::LeftDockWidgetArea, taskDock_);
+        if (propertyDock_) {
+            propertyDock_->hide();
         }
+        if (modelDock_) {
+            modelDock_->hide();
+        }
+        taskDock_->show();
+        taskDock_->raise();
+        QList<QDockWidget*> docks;
+        docks << taskDock_.data();
+        mainWindow_->resizeDocks(docks, QList<int>() << 360, Qt::Horizontal);
     }
-    if (!modelTaskTabs_) {
-        return;
-    }
-    modelTaskTabs_->setTabText(0, tr("Modelo"));
-    modelTaskTabs_->setTabText(1, tr("Tareas"));
-    modelTaskTabs_->setCurrentIndex(editing ? 1 : 0);
-    modelTaskTabs_->setProperty("SolidFreeCADTaskStripReplaced", true);
-    if (modelTaskTabs_->tabBar()) {
-        modelTaskTabs_->tabBar()->hide();
+    else {
+        taskDock_->hide();
+        if (modelDock_) {
+            modelDock_->show();
+            modelDock_->raise();
+        }
+        if (propertyDock_) {
+            propertyDock_->show();
+        }
+        QList<QDockWidget*> docks;
+        if (modelDock_) {
+            docks << modelDock_.data();
+        }
+        if (propertyDock_) {
+            docks << propertyDock_.data();
+        }
+        if (!docks.isEmpty()) {
+            mainWindow_->resizeDocks(docks, QList<int>(docks.size(), 300), Qt::Horizontal);
+        }
     }
 }
 
