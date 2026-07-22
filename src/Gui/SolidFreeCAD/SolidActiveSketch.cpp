@@ -29,6 +29,38 @@
 #include <Gui/Selection/Selection.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
+namespace
+{
+
+bool containsTaskView(QDockWidget* dock)
+{
+    if (!dock) {
+        return false;
+    }
+    for (QWidget* child : dock->findChildren<QWidget*>()) {
+        const QString className = QString::fromLatin1(child->metaObject()->className());
+        if (className.contains(QStringLiteral("TaskView"), Qt::CaseInsensitive)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isTaskDock(QDockWidget* dock)
+{
+    if (!dock) {
+        return false;
+    }
+    const QString identity =
+        (dock->objectName() + QLatin1Char(' ') + dock->windowTitle()).toLower();
+    return containsTaskView(dock)
+        || identity.contains(QStringLiteral("tasks"))
+        || identity.contains(QStringLiteral("task view"))
+        || identity.contains(QStringLiteral("tareas"));
+}
+
+}  // namespace
+
 namespace SolidFreeCAD
 {
 
@@ -52,10 +84,10 @@ bool SolidActiveSketch::install(Gui::MainWindow* mainWindow)
     applyPreferences();
 
     refreshTimer_ = new QTimer(this);
-    refreshTimer_->setInterval(160);
+    refreshTimer_->setInterval(120);
     connect(refreshTimer_, &QTimer::timeout, this, [this]() { refresh(); });
     refreshTimer_->start();
-    for (const int delay : {0, 250, 700, 1400, 2400}) {
+    for (const int delay : {0, 120, 300, 700, 1400, 2400}) {
         QTimer::singleShot(delay, this, [this]() { refresh(); });
     }
     return true;
@@ -71,10 +103,16 @@ void SolidActiveSketch::uninstall()
         refreshTimer_->stop();
         refreshTimer_->deleteLater();
     }
+    if (mainWindow_) {
+        for (QDockWidget* dock : mainWindow_->findChildren<QDockWidget*>()) {
+            if (isTaskDock(dock)) {
+                mainWindow_->removeDockWidget(dock);
+                dock->hide();
+                dock->setProperty("SolidFreeCADTaskDockActive", false);
+            }
+        }
+    }
     if (taskDock_) {
-        mainWindow_->removeDockWidget(taskDock_);
-        taskDock_->hide();
-        taskDock_->setProperty("SolidFreeCADTaskDockActive", false);
         taskDock_->setTitleBarWidget(nullptr);
     }
     if (propertyDock_) {
@@ -340,10 +378,6 @@ void SolidActiveSketch::discoverDockWidgets()
         return;
     }
     auto* manager = Gui::DockWindowManager::instance();
-    if (!taskDock_ && manager) {
-        QWidget* taskView = manager->getDockWindow("Tasks");
-        taskDock_ = taskView ? qobject_cast<QDockWidget*>(taskView->parentWidget()) : nullptr;
-    }
     if (!modelDock_ && manager) {
         QWidget* modelView = manager->getDockWindow("Model");
         modelDock_ = modelView ? qobject_cast<QDockWidget*>(modelView->parentWidget()) : nullptr;
@@ -354,24 +388,26 @@ void SolidActiveSketch::discoverDockWidgets()
         );
     }
 
+    QDockWidget* bestTaskDock = nullptr;
+    int bestScore = -1;
     for (QDockWidget* dock : mainWindow_->findChildren<QDockWidget*>()) {
         if (!dock) {
             continue;
         }
         const QString identity =
             (dock->objectName() + QLatin1Char(' ') + dock->windowTitle()).toLower();
-        bool containsTaskView = false;
-        for (QWidget* child : dock->findChildren<QWidget*>()) {
-            const QString className = QString::fromLatin1(child->metaObject()->className());
-            if (className.contains(QStringLiteral("TaskView"), Qt::CaseInsensitive)) {
-                containsTaskView = true;
-                break;
-            }
+        const bool hasTaskView = containsTaskView(dock);
+        int score = hasTaskView ? 100 : 0;
+        if (identity.contains(QStringLiteral("tasks"))
+            || identity.contains(QStringLiteral("tareas"))) {
+            score += 50;
         }
-        if (!taskDock_ && (containsTaskView
-                           || identity.contains(QStringLiteral("tasks"))
-                           || identity.contains(QStringLiteral("tareas")))) {
-            taskDock_ = dock;
+        if (dock->isVisible()) {
+            score += 10;
+        }
+        if (score > bestScore && score > 0) {
+            bestScore = score;
+            bestTaskDock = dock;
         }
         if (!modelDock_ && (identity.contains(QStringLiteral("model"))
                             || identity.contains(QStringLiteral("modelo"))
@@ -380,6 +416,17 @@ void SolidActiveSketch::discoverDockWidgets()
         }
     }
 
+    if (bestTaskDock && bestTaskDock != taskDock_) {
+        if (taskDock_) {
+            disconnect(taskDock_, nullptr, this, nullptr);
+        }
+        if (compactTaskTitleBar_) {
+            compactTaskTitleBar_->deleteLater();
+            compactTaskTitleBar_.clear();
+        }
+        taskDock_ = bestTaskDock;
+        taskDockSignalsConnected_ = false;
+    }
     if (!taskDock_) {
         return;
     }
@@ -403,12 +450,17 @@ void SolidActiveSketch::discoverDockWidgets()
 
 void SolidActiveSketch::suppressTaskDockOutsideEdit()
 {
-    if (!mainWindow_ || !taskDock_ || currentEditing_) {
+    if (!mainWindow_ || currentEditing_) {
         return;
     }
-    mainWindow_->removeDockWidget(taskDock_);
-    taskDock_->hide();
-    taskDock_->setProperty("SolidFreeCADTaskDockActive", false);
+    for (QDockWidget* dock : mainWindow_->findChildren<QDockWidget*>()) {
+        if (!isTaskDock(dock)) {
+            continue;
+        }
+        mainWindow_->removeDockWidget(dock);
+        dock->hide();
+        dock->setProperty("SolidFreeCADTaskDockActive", false);
+    }
 }
 
 void SolidActiveSketch::updateConfirmationCorner(bool editing, App::DocumentObject* sketch)
@@ -466,53 +518,64 @@ void SolidActiveSketch::updateGuidance(bool editing, App::DocumentObject* sketch
 void SolidActiveSketch::updateTaskPanel(bool editing)
 {
     discoverDockWidgets();
-    if (!mainWindow_ || !taskDock_) {
+    if (!mainWindow_) {
         return;
+    }
+
+    if (!editing) {
+        suppressTaskDockOutsideEdit();
+        QList<QDockWidget*> docks;
+        QList<int> sizes;
+        if (modelDock_) {
+            modelDock_->show();
+            modelDock_->raise();
+            docks.append(modelDock_.data());
+            sizes.append(300);
+        }
+        if (propertyDock_) {
+            propertyDock_->show();
+            docks.append(propertyDock_.data());
+            sizes.append(300);
+        }
+        if (!docks.isEmpty()) {
+            mainWindow_->resizeDocks(docks, sizes, Qt::Horizontal);
+        }
+        return;
+    }
+
+    if (!taskDock_) {
+        return;
+    }
+    for (QDockWidget* dock : mainWindow_->findChildren<QDockWidget*>()) {
+        if (!isTaskDock(dock) || dock == taskDock_) {
+            continue;
+        }
+        mainWindow_->removeDockWidget(dock);
+        dock->hide();
+        dock->setProperty("SolidFreeCADTaskDockActive", false);
     }
 
     taskDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     taskDock_->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     taskDock_->setMinimumWidth(300);
     taskDock_->setMaximumWidth(520);
-    taskDock_->setProperty("SolidFreeCADTaskDockActive", editing);
-
-    if (editing) {
-        mainWindow_->removeDockWidget(taskDock_);
-        taskDock_->setFloating(false);
-        mainWindow_->addDockWidget(Qt::LeftDockWidgetArea, taskDock_);
-        if (propertyDock_) {
-            propertyDock_->hide();
-        }
-        if (modelDock_) {
-            modelDock_->hide();
-        }
-        taskDock_->show();
-        taskDock_->raise();
-        QList<QDockWidget*> docks;
-        QList<int> sizes;
-        docks.append(taskDock_.data());
-        sizes.append(360);
-        mainWindow_->resizeDocks(docks, sizes, Qt::Horizontal);
-        return;
+    taskDock_->setProperty("SolidFreeCADTaskDockActive", true);
+    mainWindow_->removeDockWidget(taskDock_);
+    taskDock_->setFloating(false);
+    mainWindow_->addDockWidget(Qt::LeftDockWidgetArea, taskDock_);
+    if (propertyDock_) {
+        propertyDock_->hide();
     }
-
-    suppressTaskDockOutsideEdit();
+    if (modelDock_) {
+        modelDock_->hide();
+    }
+    taskDock_->show();
+    taskDock_->raise();
     QList<QDockWidget*> docks;
     QList<int> sizes;
-    if (modelDock_) {
-        modelDock_->show();
-        modelDock_->raise();
-        docks.append(modelDock_.data());
-        sizes.append(300);
-    }
-    if (propertyDock_) {
-        propertyDock_->show();
-        docks.append(propertyDock_.data());
-        sizes.append(300);
-    }
-    if (!docks.isEmpty()) {
-        mainWindow_->resizeDocks(docks, sizes, Qt::Horizontal);
-    }
+    docks.append(taskDock_.data());
+    sizes.append(360);
+    mainWindow_->resizeDocks(docks, sizes, Qt::Horizontal);
 }
 
 void SolidActiveSketch::selectSketchRibbon()
