@@ -3,9 +3,9 @@
 #include <QObject>
 #include <QPointer>
 
+class QDockWidget;
 class QFrame;
 class QLabel;
-class QTabWidget;
 class QTimer;
 class QWidget;
 
@@ -40,6 +40,7 @@ private:
     void ensureConfirmationCorner();
     void ensureGuidancePanel();
     void configureNewSketchCommand();
+    void discoverDockWidgets();
     void updateConfirmationCorner(bool editing, App::DocumentObject* sketch);
     void updateGuidance(bool editing, App::DocumentObject* sketch);
     void updateTaskPanel(bool editing);
@@ -52,7 +53,10 @@ private:
     QPointer<QFrame> guidanceFrame_;
     QPointer<QLabel> guidanceTitle_;
     QPointer<QLabel> guidanceText_;
-    QPointer<QTabWidget> modelTaskTabs_;
+    QPointer<QDockWidget> taskDock_;
+    QPointer<QDockWidget> propertyDock_;
+    QPointer<QDockWidget> modelDock_;
+    QPointer<QWidget> compactTaskTitleBar_;
     bool installed_ = false;
     bool previousEditing_ = false;
     bool preferencesApplied_ = false;
