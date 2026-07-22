@@ -2,7 +2,9 @@
 
 #include <cmath>
 #include <exception>
+#include <algorithm>
 
+#include <QStyle>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -24,6 +26,8 @@
 #include <App/PropertyUnits.h>
 #include <Base/Exception.h>
 #include <Base/Type.h>
+#include <Gui/Application.h>
+#include <Gui/Command.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 
@@ -69,12 +73,31 @@ SolidPartDesignMvp::~SolidPartDesignMvp()
 
 bool SolidPartDesignMvp::install(Gui::MainWindow* mainWindow)
 {
-    if (installed_ || !mainWindow) {
+    if (installed_ || !mainWindow || !Gui::Application::Instance) {
         return installed_;
     }
 
     mainWindow_ = mainWindow;
     installed_ = true;
+
+    auto& commandManager = Gui::Application::Instance->commandManager();
+    commandChangedConnection_ = commandManager.signalChanged.connect([this]() {
+        for (const int delay : {0, 75, 250}) {
+            QTimer::singleShot(delay, this, [this]() {
+                buildFeatureEditor();
+                applyRibbonScope();
+                refreshSelection();
+            });
+        }
+    });
+
+    scopeTimer_ = new QTimer(this);
+    scopeTimer_->setInterval(400);
+    connect(scopeTimer_, &QTimer::timeout, this, [this]() {
+        applyRibbonScope();
+    });
+    scopeTimer_->start();
+
     buildFeatureEditor();
     applyRibbonScope();
     refreshSelection();
@@ -94,9 +117,15 @@ void SolidPartDesignMvp::uninstall()
     if (!installed_) {
         return;
     }
+    commandChangedConnection_.disconnect();
+    if (scopeTimer_) {
+        scopeTimer_->stop();
+        scopeTimer_->deleteLater();
+    }
     if (featureGroup_) {
         featureGroup_->deleteLater();
     }
+    scopeTimer_.clear();
     featureGroup_.clear();
     propertyPanel_.clear();
     valueCaption_.clear();
@@ -361,7 +390,7 @@ void SolidPartDesignMvp::refreshSelection()
             ? tr("Todas las aristas de la operación base")
             : tr("Referencias seleccionadas: %1").arg(count));
         if (summaryLabel) {
-            summaryLabel->setText(fillet
+            summaryLabel_->setText(fillet
                 ? tr("Radio editable y control explícito de las aristas de redondeo.")
                 : tr("Distancia editable y control explícito de las aristas de chaflán."));
         }
