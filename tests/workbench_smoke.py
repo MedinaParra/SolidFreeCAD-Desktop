@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import time
+from pathlib import Path
 
 import FreeCAD as App
 import FreeCADGui
@@ -15,6 +17,7 @@ main_window = FreeCADGui.getMainWindow()
 if main_window is None:
     raise RuntimeError("FreeCAD main window is not available")
 
+main_window.resize(1720, 900)
 main_window.show()
 application.processEvents()
 
@@ -124,10 +127,25 @@ App.closeDocument(pocket_document.Name)
 App.closeDocument(model.document.Name)
 process_for(0.1)
 
+workspace_root = os.environ.get("GITHUB_WORKSPACE")
+if workspace_root:
+    m3_artifact_dir = Path(workspace_root) / "build" / "artifacts" / "m3-partdesign"
+elif Path("/results").is_dir():
+    m3_artifact_dir = Path("/results") / "m3-partdesign"
+else:
+    m3_artifact_dir = Path.cwd() / "m3-partdesign-artifacts"
+os.environ["SOLIDFREECAD_M3_ARTIFACT_DIR"] = str(m3_artifact_dir)
+
+from m3_partdesign_smoke import main as run_m3_partdesign_smoke
+
+run_m3_partdesign_smoke()
+process_for(0.1)
+
 print(
     "SOLIDFREECAD_WORKBENCH_SMOKE_OK "
-    f"registered={','.join(required)} property_manager=Sketch,Pad,Pocket "
-    f"pad_length_mm={new_length}",
+    f"registered={','.join(required)} "
+    "property_manager=Sketch,Pad,Pocket,Revolution,Fillet,Chamfer "
+    f"pad_length_mm={new_length} m3_artifacts={m3_artifact_dir}",
     flush=True,
 )
 application.quit()
