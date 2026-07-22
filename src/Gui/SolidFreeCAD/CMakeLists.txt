@@ -1,4 +1,6 @@
 set(SolidFreeCADGui_SRCS
+    SolidActiveSketch.cpp
+    SolidActiveSketch.h
     SolidCommandBridge.cpp
     SolidCommandBridge.h
     SolidCommandSearch.cpp
