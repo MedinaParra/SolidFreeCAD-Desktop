@@ -66,6 +66,7 @@ void SolidActiveSketch::uninstall()
     if (!installed_) {
         return;
     }
+    currentEditing_ = false;
     if (refreshTimer_) {
         refreshTimer_->stop();
         refreshTimer_->deleteLater();
@@ -104,6 +105,7 @@ void SolidActiveSketch::uninstall()
     compactTaskTitleBar_.clear();
     mainWindow_ = nullptr;
     previousEditing_ = false;
+    taskDockSignalsConnected_ = false;
     installed_ = false;
 }
 
@@ -158,8 +160,6 @@ bool SolidActiveSketch::activeSketch(App::DocumentObject** object) const
         return false;
     }
 
-    // editDocument() is intentionally used without an active-document fallback.
-    // This avoids treating transient view-provider state as an active Sketcher session.
     Gui::Document* document = Gui::Application::Instance->editDocument();
     auto* provider = document
         ? dynamic_cast<Gui::ViewProviderDocumentObject*>(document->getInEdit())
@@ -187,6 +187,7 @@ void SolidActiveSketch::refresh()
 
     App::DocumentObject* sketch = nullptr;
     const bool editing = activeSketch(&sketch);
+    currentEditing_ = editing;
     mainWindow_->setProperty("SolidFreeCADSketchEditing", editing);
     if (editing && !previousEditing_) {
         selectSketchRibbon();
@@ -353,14 +354,22 @@ void SolidActiveSketch::discoverDockWidgets()
         );
     }
 
-    // Fallback for alternative FreeCAD dock registration timing or translated titles.
     for (QDockWidget* dock : mainWindow_->findChildren<QDockWidget*>()) {
         if (!dock) {
             continue;
         }
         const QString identity =
             (dock->objectName() + QLatin1Char(' ') + dock->windowTitle()).toLower();
-        if (!taskDock_ && (identity.contains(QStringLiteral("tasks"))
+        bool containsTaskView = false;
+        for (QWidget* child : dock->findChildren<QWidget*>()) {
+            const QString className = QString::fromLatin1(child->metaObject()->className());
+            if (className.contains(QStringLiteral("TaskView"), Qt::CaseInsensitive)) {
+                containsTaskView = true;
+                break;
+            }
+        }
+        if (!taskDock_ && (containsTaskView
+                           || identity.contains(QStringLiteral("tasks"))
                            || identity.contains(QStringLiteral("tareas")))) {
             taskDock_ = dock;
         }
@@ -371,13 +380,35 @@ void SolidActiveSketch::discoverDockWidgets()
         }
     }
 
-    if (taskDock_ && !compactTaskTitleBar_) {
+    if (!taskDock_) {
+        return;
+    }
+    taskDock_->setProperty("SolidFreeCADTaskDockDiscovered", true);
+    if (!compactTaskTitleBar_) {
         compactTaskTitleBar_ = new QWidget(taskDock_);
         compactTaskTitleBar_->setObjectName(QStringLiteral("SolidFreeCADCompactTaskTitleBar"));
         compactTaskTitleBar_->setFixedHeight(1);
         compactTaskTitleBar_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         taskDock_->setTitleBarWidget(compactTaskTitleBar_);
     }
+    if (!taskDockSignalsConnected_) {
+        connect(taskDock_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+            if (visible && !currentEditing_) {
+                QTimer::singleShot(0, this, [this]() { suppressTaskDockOutsideEdit(); });
+            }
+        });
+        taskDockSignalsConnected_ = true;
+    }
+}
+
+void SolidActiveSketch::suppressTaskDockOutsideEdit()
+{
+    if (!mainWindow_ || !taskDock_ || currentEditing_) {
+        return;
+    }
+    mainWindow_->removeDockWidget(taskDock_);
+    taskDock_->hide();
+    taskDock_->setProperty("SolidFreeCADTaskDockActive", false);
 }
 
 void SolidActiveSketch::updateConfirmationCorner(bool editing, App::DocumentObject* sketch)
@@ -446,7 +477,6 @@ void SolidActiveSketch::updateTaskPanel(bool editing)
     taskDock_->setProperty("SolidFreeCADTaskDockActive", editing);
 
     if (editing) {
-        // Explicit removal breaks any previous tabification or bottom/right dock group.
         mainWindow_->removeDockWidget(taskDock_);
         taskDock_->setFloating(false);
         mainWindow_->addDockWidget(Qt::LeftDockWidgetArea, taskDock_);
@@ -466,9 +496,7 @@ void SolidActiveSketch::updateTaskPanel(bool editing)
         return;
     }
 
-    // Outside edit mode, remove the native Tasks dock from every dock group.
-    mainWindow_->removeDockWidget(taskDock_);
-    taskDock_->hide();
+    suppressTaskDockOutsideEdit();
     QList<QDockWidget*> docks;
     QList<int> sizes;
     if (modelDock_) {
