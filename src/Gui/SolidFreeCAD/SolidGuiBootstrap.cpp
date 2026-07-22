@@ -2,6 +2,7 @@
 
 #include "SolidDocumentWorkspace.h"
 #include "SolidGuiManager.h"
+#include "SolidPartDesignMvp.h"
 #include "SolidPropertyManager.h"
 #include "SolidSketchEnhancements.h"
 #include "SolidWorkspacePolish.h"
@@ -23,6 +24,7 @@ std::unique_ptr<SolidPropertyManager> propertyManager;
 std::unique_ptr<SolidSketchEnhancements> sketchEnhancements;
 std::unique_ptr<SolidWorkspacePolish> workspacePolish;
 std::unique_ptr<SolidDocumentWorkspace> documentWorkspace;
+std::unique_ptr<SolidPartDesignMvp> partDesignMvp;
 
 bool classicModeRequestedByEnvironment()
 {
@@ -66,16 +68,21 @@ void installGui(Gui::MainWindow* mainWindow)
     if (!documentWorkspace) {
         documentWorkspace = std::make_unique<SolidDocumentWorkspace>();
     }
+    if (!partDesignMvp) {
+        partDesignMvp = std::make_unique<SolidPartDesignMvp>();
+    }
 
     guiManager->install(mainWindow);
     propertyManager->install(mainWindow);
     sketchEnhancements->install(mainWindow);
     workspacePolish->install(mainWindow);
     documentWorkspace->install(mainWindow);
+    partDesignMvp->install(mainWindow);
 }
 
 void uninstallGui()
 {
+    partDesignMvp.reset();
     documentWorkspace.reset();
     workspacePolish.reset();
     sketchEnhancements.reset();
