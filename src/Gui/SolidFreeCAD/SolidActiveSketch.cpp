@@ -90,6 +90,7 @@ void SolidActiveSketch::uninstall()
     if (compactTaskTitleBar_) {
         compactTaskTitleBar_->deleteLater();
     }
+
     restorePreferences();
     refreshTimer_.clear();
     confirmationCorner_.clear();
@@ -160,11 +161,10 @@ bool SolidActiveSketch::activeSketch(App::DocumentObject** object) const
     if (!document) {
         document = Gui::Application::Instance->activeDocument();
     }
-    Gui::ViewProvider* viewProvider = document ? document->getInEdit() : nullptr;
-    auto* documentViewProvider = dynamic_cast<Gui::ViewProviderDocumentObject*>(viewProvider);
-    App::DocumentObject* candidate = documentViewProvider
-        ? documentViewProvider->getObject()
+    auto* provider = document
+        ? dynamic_cast<Gui::ViewProviderDocumentObject*>(document->getInEdit())
         : nullptr;
+    App::DocumentObject* candidate = provider ? provider->getObject() : nullptr;
     if (!candidate || !candidate->getTypeId().isDerivedFrom(
             Base::Type::fromName("Sketcher::SketchObject"))) {
         return false;
@@ -191,7 +191,6 @@ void SolidActiveSketch::refresh()
     if (editing && !previousEditing_) {
         selectSketchRibbon();
     }
-
     if (editing) {
         if (auto* badge = mainWindow_->findChild<QLabel*>(
                 QStringLiteral("SolidFreeCADContextBadge"))) {
@@ -234,19 +233,16 @@ void SolidActiveSketch::ensureConfirmationCorner()
 
     auto* accept = new QPushButton(tr("Aceptar"), confirmationCorner_);
     accept->setObjectName(QStringLiteral("SolidFreeCADSketchAccept"));
-    accept->setToolTip(tr("Aceptar los cambios del diálogo activo"));
     connect(accept, &QPushButton::clicked, confirmationCorner_, []() { Gui::Control().accept(); });
     layout->addWidget(accept);
 
     auto* cancel = new QPushButton(tr("Cancelar"), confirmationCorner_);
     cancel->setObjectName(QStringLiteral("SolidFreeCADSketchCancel"));
-    cancel->setToolTip(tr("Cancelar los cambios del diálogo activo"));
     connect(cancel, &QPushButton::clicked, confirmationCorner_, []() { Gui::Control().reject(); });
     layout->addWidget(cancel);
 
     auto* exit = new QPushButton(tr("Salir del croquis"), confirmationCorner_);
     exit->setObjectName(QStringLiteral("SolidFreeCADSketchExit"));
-    exit->setToolTip(tr("Finalizar la edición del croquis"));
     connect(exit, &QPushButton::clicked, confirmationCorner_, []() {
         if (!Gui::Application::Instance) {
             return;
@@ -312,8 +308,7 @@ void SolidActiveSketch::configureNewSketchCommand()
     if (!ribbon) {
         return;
     }
-    const auto toolbars = ribbon->findChildren<QToolBar*>();
-    for (QToolBar* toolbar : toolbars) {
+    for (QToolBar* toolbar : ribbon->findChildren<QToolBar*>()) {
         for (QAction* action : toolbar->actions()) {
             if (!action || action->property("SolidFreeCADCommandName").toString()
                     != QStringLiteral("PartDesign_NewSketch")) {
@@ -384,8 +379,8 @@ void SolidActiveSketch::updateGuidance(bool editing, App::DocumentObject* sketch
     if (!guidanceFrame_ || !guidanceTitle_ || !guidanceText_) {
         return;
     }
-    const auto selection = Gui::Selection().getCompleteSelection(Gui::ResolveMode::NoResolve);
-    const bool ready = !editing && !selection.empty();
+    const bool ready = !editing
+        && !Gui::Selection().getCompleteSelection(Gui::ResolveMode::NoResolve).empty();
     guidanceFrame_->setProperty("ready", ready);
     guidanceFrame_->setProperty("editing", editing);
     if (editing) {
@@ -439,28 +434,29 @@ void SolidActiveSketch::updateTaskPanel(bool editing)
         taskDock_->show();
         taskDock_->raise();
         QList<QDockWidget*> docks;
-        docks << taskDock_.data();
-        mainWindow_->resizeDocks(docks, QList<int>() << 360, Qt::Horizontal);
+        QList<int> sizes;
+        docks.append(taskDock_.data());
+        sizes.append(360);
+        mainWindow_->resizeDocks(docks, sizes, Qt::Horizontal);
+        return;
     }
-    else {
-        taskDock_->hide();
-        if (modelDock_) {
-            modelDock_->show();
-            modelDock_->raise();
-        }
-        if (propertyDock_) {
-            propertyDock_->show();
-        }
-        QList<QDockWidget*> docks;
-        if (modelDock_) {
-            docks << modelDock_.data();
-        }
-        if (propertyDock_) {
-            docks << propertyDock_.data();
-        }
-        if (!docks.isEmpty()) {
-            mainWindow_->resizeDocks(docks, QList<int>(docks.size(), 300), Qt::Horizontal);
-        }
+
+    taskDock_->hide();
+    QList<QDockWidget*> docks;
+    QList<int> sizes;
+    if (modelDock_) {
+        modelDock_->show();
+        modelDock_->raise();
+        docks.append(modelDock_.data());
+        sizes.append(300);
+    }
+    if (propertyDock_) {
+        propertyDock_->show();
+        docks.append(propertyDock_.data());
+        sizes.append(300);
+    }
+    if (!docks.isEmpty()) {
+        mainWindow_->resizeDocks(docks, sizes, Qt::Horizontal);
     }
 }
 
