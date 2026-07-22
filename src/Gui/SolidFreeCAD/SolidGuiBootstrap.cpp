@@ -1,5 +1,6 @@
 #include "SolidGuiBootstrap.h"
 
+#include "SolidActiveSketch.h"
 #include "SolidDocumentWorkspace.h"
 #include "SolidGuiManager.h"
 #include "SolidPartDesignMvp.h"
@@ -25,6 +26,7 @@ std::unique_ptr<SolidSketchEnhancements> sketchEnhancements;
 std::unique_ptr<SolidWorkspacePolish> workspacePolish;
 std::unique_ptr<SolidDocumentWorkspace> documentWorkspace;
 std::unique_ptr<SolidPartDesignMvp> partDesignMvp;
+std::unique_ptr<SolidActiveSketch> activeSketch;
 
 bool classicModeRequestedByEnvironment()
 {
@@ -71,6 +73,9 @@ void installGui(Gui::MainWindow* mainWindow)
     if (!partDesignMvp) {
         partDesignMvp = std::make_unique<SolidPartDesignMvp>();
     }
+    if (!activeSketch) {
+        activeSketch = std::make_unique<SolidActiveSketch>();
+    }
 
     guiManager->install(mainWindow);
     propertyManager->install(mainWindow);
@@ -78,10 +83,12 @@ void installGui(Gui::MainWindow* mainWindow)
     workspacePolish->install(mainWindow);
     documentWorkspace->install(mainWindow);
     partDesignMvp->install(mainWindow);
+    activeSketch->install(mainWindow);
 }
 
 void uninstallGui()
 {
+    activeSketch.reset();
     partDesignMvp.reset();
     documentWorkspace.reset();
     workspacePolish.reset();
