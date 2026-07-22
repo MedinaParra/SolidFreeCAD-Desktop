@@ -171,15 +171,33 @@ GUI_ACTIVE_SKETCH_INSERT = GUI_ACTIVE_SKETCH_ANCHOR + '''    confirmation_corner
     if not sketch_general.GetBool("RestoreCamera", False):
         raise RuntimeError("Sketch camera restoration is disabled")
 
-    task_tabs = [
-        tabs
-        for tabs in model_docks[0].findChildren(QtWidgets.QTabWidget)
-        if bool(tabs.property("SolidFreeCADTaskStripReplaced"))
+    task_docks = [
+        dock
+        for dock in main_window.findChildren(QtWidgets.QDockWidget)
+        if bool(dock.property("SolidFreeCADTaskDockActive"))
     ]
-    if not task_tabs or task_tabs[0].currentIndex() != 1:
-        raise RuntimeError("The task panel was not activated during sketch editing")
-    if task_tabs[0].tabBar().isVisible():
-        raise RuntimeError("The obsolete Model/Tasks strip is still visible")
+    if len(task_docks) != 1:
+        raise RuntimeError(f"Expected one active Sketcher task dock, got {len(task_docks)}")
+    task_dock = task_docks[0]
+    if not task_dock.isVisible():
+        raise RuntimeError("The native Sketcher task dock is not visible")
+    if main_window.dockWidgetArea(task_dock) != QtCore.Qt.LeftDockWidgetArea:
+        raise RuntimeError("The native Sketcher task dock is not on the left")
+    if task_dock.geometry().width() > 540 or task_dock.geometry().right() > 560:
+        raise RuntimeError(
+            f"The task dock still covers the viewport: geometry={task_dock.geometry()}"
+        )
+    task_title_bar = task_dock.titleBarWidget()
+    if task_title_bar is None or task_title_bar.height() > 2:
+        raise RuntimeError("The obsolete horizontal Tasks title strip is still visible")
+
+    property_dock = main_window.findChild(
+        QtWidgets.QDockWidget, "SolidFreeCADPropertyManager"
+    )
+    if property_dock is None:
+        raise RuntimeError("The SolidFreeCAD Property Manager dock is missing")
+    if property_dock.isVisible() or model_docks[0].isVisible():
+        raise RuntimeError("Property/model docks were not replaced by the active task pane")
 
     camera_orientation = active_view.getCameraOrientation()
     view_direction = camera_orientation.multVec(App.Vector(0, 0, -1))
@@ -195,8 +213,10 @@ GUI_SKETCH_RESET_ANCHOR = "    process_for(0.25)\n\n    vertical_slice_path = Pa
 GUI_SKETCH_RESET_INSERT = '''    process_for(0.25)
     if confirmation_corner.isVisible():
         raise RuntimeError("The Confirmation Corner remained visible after leaving Sketcher")
-    if task_tabs[0].currentIndex() != 0:
-        raise RuntimeError("The model history was not restored after leaving Sketcher")
+    if task_dock.isVisible():
+        raise RuntimeError("The native task dock remained visible after leaving Sketcher")
+    if not model_docks[0].isVisible() or not property_dock.isVisible():
+        raise RuntimeError("Model history and Property Manager were not restored")
     stage("active-sketch-reset-validated")
 
     vertical_slice_path = Path(
