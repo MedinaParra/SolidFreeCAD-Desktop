@@ -1,10 +1,9 @@
 #include "SolidPartDesignMvp.h"
 
+#include <algorithm>
 #include <cmath>
 #include <exception>
-#include <algorithm>
 
-#include <QStyle>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -13,6 +12,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QStackedWidget>
+#include <QStyle>
 #include <QTabBar>
 #include <QTimer>
 #include <QToolBar>
@@ -390,7 +390,7 @@ void SolidPartDesignMvp::refreshSelection()
             ? tr("Todas las aristas de la operación base")
             : tr("Referencias seleccionadas: %1").arg(count));
         if (summaryLabel) {
-            summaryLabel_->setText(fillet
+            summaryLabel->setText(fillet
                 ? tr("Radio editable y control explícito de las aristas de redondeo.")
                 : tr("Distancia editable y control explícito de las aristas de chaflán."));
         }
