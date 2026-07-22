@@ -1,6 +1,6 @@
 # SolidFreeCAD Desktop roadmap
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 ## Product scope
 
@@ -13,7 +13,7 @@ The following areas are intentionally outside the current product scope:
 - Cloud-only 3DEXPERIENCE services.
 - Licensed SOLIDWORKS-specific formats or behavior that cannot be reproduced safely with FreeCAD APIs.
 
-The existing Simulation/FEM ribbon placeholder is scheduled for removal. Inspection in SolidFreeCAD means geometry, dimensions, mass properties, clearances, interferences and model-health checks, not engineering simulation.
+The obsolete Simulation/FEM ribbon page has been removed from the SolidFreeCAD workspace and is kept out after dynamic workbench and command registration. Inspection in SolidFreeCAD means geometry, dimensions, mass properties, clearances, interferences and model-health checks, not engineering simulation.
 
 ## Visual design contract
 
@@ -31,18 +31,18 @@ The existing Simulation/FEM ribbon placeholder is scheduled for removal. Inspect
 | Area | Progress | Current state |
 | --- | ---: | --- |
 | Reproducible FreeCAD 1.1.1 foundation | 90% | Overlay, CI, Ubuntu build, deb packaging, clean install and Classic recovery are operational. |
-| SolidFreeCAD mechanical workspace | 55% | Tabbed ribbon, command search, initial colorful icons, model history, Property Manager and contextual workspace states are implemented. Welcome, context-command and heads-up interaction layers remain. |
-| Basic Part Design workflow | 46% | Body, Sketch, Pad and Pocket are validated; the reviewed manuals add stricter requirements for sketch guidance, constraints, dimensions, status and repair. |
-| File and interchange workflow | 45% | Native New/Open/Save/Save As/Import/Export commands are exposed; recent documents, templates and STEP round-trip fixtures remain. |
-| FCStd compatibility and persistence | 42% | A Sketch -> Pad vertical slice is saved, reopened and volume-checked. Complex-workbench preservation fixtures remain. |
-| Welded structures workflow | 15% | A ribbon placeholder exists, but structural-member, trim, cut-list and weld metadata logic are not yet implemented. |
+| SolidFreeCAD mechanical workspace | 60% | Tabbed ribbon, colorful mechanical icons, command search, document states, model history, Property Manager and guided advanced Part Design editing are implemented. Welcome, active-sketch and heads-up interaction layers remain. |
+| Basic Part Design workflow | 58% | Body, Sketch, Pad, Pocket, Revolution, Fillet and Chamfer now have validated native geometry. Guided editing exists for Angle, Radius, Size, direction, midplane, UseAllEdges and stored references. Rich sketch guidance and patterns remain. |
+| File and interchange workflow | 55% | Native New/Open/Save/Save As/Import/Export commands are exposed and the first controlled STEP export/import round trip passes a volume comparison. Recent documents and broader fixtures remain. |
+| FCStd compatibility and persistence | 50% | Sketch, Pad, Revolution, Fillet, Chamfer and imported STEP fixtures are saved as FCStd and exercised again from a clean installed package. Complex-workbench preservation remains. |
+| Welded structures workflow | 15% | A ribbon placeholder and detailed implementation model exist, but structural-member, trim, cut-list and weld metadata logic are not yet implemented. |
 | Assembly, TechDraw and Sheet Metal | 12% | Ribbon entry points exist, but production workflows, drawing-template editing and regression projects are still pending. |
 | Macro and Python workflow | 20% | The official FreeCAD Python engine remains available; a controlled macro editor and compatibility suite are not implemented yet. |
-| Product release and documentation | 28% | Installable Ubuntu development packages exist; updater, signed release, onboarding and user documentation remain. |
+| Product release and documentation | 30% | Installable Ubuntu development packages, clean-install tests and regression artifacts exist; updater, signed release, onboarding and user documentation remain. |
 
-**Estimated complete product progress: 42%.**
+**Estimated complete product progress: 45%.**
 
-The percentage remains unchanged after reviewing the SOLIDWORKS 2025 tutorial and the Easyworks good-practices manual because they validate the architecture but expand the acceptance criteria. The basic mechanical-design MVP is approximately 58% complete under the stricter sketch-quality definition.
+The full-product percentage is intentionally conservative because the professional sketch, assembly, drawing, sheet-metal and welded-structure workflows remain substantial. The basic mechanical-design MVP is approximately 65% complete under the stricter sketch-quality definition.
 
 ## Feasibility validation from the reviewed manuals
 
@@ -54,9 +54,11 @@ The reviewed workflows are technically feasible with official FreeCAD 1.1.1 comp
 - Lines, circles, arcs, ellipses, splines, slots, polygons, rectangles, points and construction geometry.
 - Geometric constraints, dimensional constraints and a parametric sketch solver.
 - Trim, extend, external geometry, offset, symmetry and sketch transformations.
-- Part Design features that consume sketches, including Pad and Pocket.
+- Part Design features that consume sketches, including Pad, Pocket and Revolution.
+- Native dress-up features including Fillet and Chamfer.
 - TechDraw pages and SVG templates with editable text fields.
 - FCStd persistence of sketches, constraints, features, document properties and TechDraw objects.
+- STEP import/export through the official Part/OpenCASCADE stack.
 
 ### SolidFreeCAD interaction work still required
 
@@ -65,6 +67,7 @@ The reviewed workflows are technically feasible with official FreeCAD 1.1.1 comp
 - A clear active-sketch state, Confirmation Corner and automatic normal-to-sketch view.
 - SolidFreeCAD-specific inference graphics, command-state feedback and sketch status presentation.
 - Smart-dimension placement and a compact value editor with units and expressions.
+- Direct add/remove editing of individual Fillet and Chamfer edge references from the SolidFreeCAD Property Manager.
 - A friendly drawing-border/title-block editor over TechDraw SVG templates.
 - Modifier-key workflows, configurable shortcuts and contextual drag-copy behavior.
 
@@ -96,6 +99,18 @@ The reviewed workflows are technically feasible with official FreeCAD 1.1.1 comp
 - Native File workspace with New, Open, Save, Save As, Import, Export, project information, Print and Close.
 - Start group for Body and Sketch creation.
 
+### M3A - Advanced Part Design vertical slice
+
+- Native Revolution fixture with a 180-degree angle, axis reference, direction and valid solid checks.
+- Native Fillet fixture with stored references, editable radius and valid recomputation.
+- Native Chamfer fixture with stored references, editable size and valid recomputation.
+- SolidFreeCAD guided Property Manager for Revolution, Fillet and Chamfer.
+- Transactional edits with Undo support.
+- Simulation/FEM workspace removal, including after dynamic workbench rebuilds.
+- Controlled Fillet STEP export/import round trip with source/imported volume comparison.
+- FCStd artifacts for all three operations and the imported STEP result.
+- Dedicated M3 screenshot and the same complete test repeated from the installed Ubuntu package.
+
 ## Current milestone - M3 Basic modeling and sketch-quality MVP
 
 The current objective is a reliable end-to-end workflow for ordinary mechanical parts, with sketch behavior suitable for daily professional use.
@@ -108,6 +123,11 @@ The current objective is a reliable end-to-end workflow for ordinary mechanical 
 - [x] Create and edit a Pocket.
 - [x] Save and reopen FCStd without losing the validated solid.
 - [x] Expose native document and interchange commands.
+- [x] Add guided Revolution parameters and regression geometry.
+- [x] Add guided Fillet and Chamfer property editing for existing edge/face references.
+- [x] Add a controlled STEP export/import round-trip fixture with a volume check.
+- [x] Remove the out-of-scope Simulation/FEM page and prevent its dynamic reappearance.
+- [ ] Add direct add/remove selection of individual Fillet and Chamfer edges inside the SolidFreeCAD Property Manager.
 
 ### Sketch creation and active-mode gates
 
@@ -155,9 +175,6 @@ The current objective is a reliable end-to-end workflow for ordinary mechanical 
 - [ ] Validate trim modes, extend-to-nearest, external/converted geometry and offset geometry.
 - [ ] Add mirror, move, rotate and scale selection workflows.
 - [ ] Add guided linear and circular sketch patterns with instance count, spacing/angle and equal-spacing options.
-- [ ] Add guided Revolution parameters and regression geometry.
-- [ ] Add Part Design Fillet and Chamfer edge-selection/property workflows.
-- [ ] Add a controlled STEP export/import round-trip fixture.
 - [ ] Replace the remaining floating Task strip with a safe context panel that preserves Sketcher editing.
 - [ ] Complete color-vector icons for every enabled command in Archivo, Operaciones and Croquis.
 
@@ -240,13 +257,14 @@ This milestone incorporates useful interaction concepts identified in the review
 
 ## M5 - Robust FCStd and STEP compatibility
 
-- Open representative FCStd files from Part Design, Assembly, TechDraw, Sheet Metal and welded-structure projects.
-- Preserve unknown workbench data when saving.
-- Detect partial restore and unsupported objects without destructive edits.
-- Build STEP/STP import and export regression fixtures with geometry and volume checks.
-- Add a compatibility report before saving over files created by a newer or unsupported feature set.
-- Add local Pack-and-Go packaging for a document and its linked files.
-- Add recent-file, autosave and session-recovery UX.
+- [ ] Open representative FCStd files from Part Design, Assembly, TechDraw, Sheet Metal and welded-structure projects.
+- [ ] Preserve unknown workbench data when saving.
+- [ ] Detect partial restore and unsupported objects without destructive edits.
+- [x] Build the first STEP/STP import and export regression fixture with geometry and volume checks.
+- [ ] Expand STEP/STP fixtures to assemblies, imported vendor geometry and complex topology.
+- [ ] Add a compatibility report before saving over files created by a newer or unsupported feature set.
+- [ ] Add local Pack-and-Go packaging for a document and its linked files.
+- [ ] Add recent-file, autosave and session-recovery UX.
 
 ## M6 - Welded structures workspace
 
@@ -331,17 +349,17 @@ Yes, SolidFreeCAD can implement a guided welded-structure workflow similar in lo
 
 ## M8 - Macro and automation workspace
 
-- Embedded macro editor.
-- Run/stop controls and output console.
-- Compatibility tests for `FreeCAD`, `Part` and selected Sketcher APIs.
-- Local macro library and trusted-script warnings.
-- Recordable command history suitable for converting repeated operations into a macro draft.
+- [ ] Embedded macro editor.
+- [ ] Run/stop controls and output console.
+- [ ] Compatibility tests for `FreeCAD`, `Part` and selected Sketcher APIs.
+- [ ] Local macro library and trusted-script warnings.
+- [ ] Recordable command history suitable for converting repeated operations into a macro draft.
 
 ## M9 - Product release
 
-- Signed packages and release channel.
-- First-run onboarding and example projects.
-- Crash recovery and session restore.
-- Performance testing with large FCStd and STEP files.
-- End-user documentation and acceptance tests.
-- Visual regression tests that reject missing, monochrome or inconsistent production icons.
+- [ ] Signed packages and release channel.
+- [ ] First-run onboarding and example projects.
+- [ ] Crash recovery and session restore.
+- [ ] Performance testing with large FCStd and STEP files.
+- [ ] End-user documentation and acceptance tests.
+- [ ] Visual regression tests that reject missing, monochrome or inconsistent production icons.
