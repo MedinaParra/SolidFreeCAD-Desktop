@@ -71,6 +71,7 @@ void SolidActiveSketch::uninstall()
         refreshTimer_->deleteLater();
     }
     if (taskDock_) {
+        mainWindow_->removeDockWidget(taskDock_);
         taskDock_->hide();
         taskDock_->setProperty("SolidFreeCADTaskDockActive", false);
         taskDock_->setTitleBarWidget(nullptr);
@@ -157,10 +158,9 @@ bool SolidActiveSketch::activeSketch(App::DocumentObject** object) const
         return false;
     }
 
+    // editDocument() is intentionally used without an active-document fallback.
+    // This avoids treating transient view-provider state as an active Sketcher session.
     Gui::Document* document = Gui::Application::Instance->editDocument();
-    if (!document) {
-        document = Gui::Application::Instance->activeDocument();
-    }
     auto* provider = document
         ? dynamic_cast<Gui::ViewProviderDocumentObject*>(document->getInEdit())
         : nullptr;
@@ -233,16 +233,19 @@ void SolidActiveSketch::ensureConfirmationCorner()
 
     auto* accept = new QPushButton(tr("Aceptar"), confirmationCorner_);
     accept->setObjectName(QStringLiteral("SolidFreeCADSketchAccept"));
+    accept->setToolTip(tr("Aceptar los cambios del diálogo activo"));
     connect(accept, &QPushButton::clicked, confirmationCorner_, []() { Gui::Control().accept(); });
     layout->addWidget(accept);
 
     auto* cancel = new QPushButton(tr("Cancelar"), confirmationCorner_);
     cancel->setObjectName(QStringLiteral("SolidFreeCADSketchCancel"));
+    cancel->setToolTip(tr("Cancelar los cambios del diálogo activo"));
     connect(cancel, &QPushButton::clicked, confirmationCorner_, []() { Gui::Control().reject(); });
     layout->addWidget(cancel);
 
     auto* exit = new QPushButton(tr("Salir del croquis"), confirmationCorner_);
     exit->setObjectName(QStringLiteral("SolidFreeCADSketchExit"));
+    exit->setToolTip(tr("Finalizar la edición del croquis"));
     connect(exit, &QPushButton::clicked, confirmationCorner_, []() {
         if (!Gui::Application::Instance) {
             return;
@@ -349,6 +352,25 @@ void SolidActiveSketch::discoverDockWidgets()
             QStringLiteral("SolidFreeCADPropertyManager")
         );
     }
+
+    // Fallback for alternative FreeCAD dock registration timing or translated titles.
+    for (QDockWidget* dock : mainWindow_->findChildren<QDockWidget*>()) {
+        if (!dock) {
+            continue;
+        }
+        const QString identity =
+            (dock->objectName() + QLatin1Char(' ') + dock->windowTitle()).toLower();
+        if (!taskDock_ && (identity.contains(QStringLiteral("tasks"))
+                           || identity.contains(QStringLiteral("tareas")))) {
+            taskDock_ = dock;
+        }
+        if (!modelDock_ && (identity.contains(QStringLiteral("model"))
+                            || identity.contains(QStringLiteral("modelo"))
+                            || identity.contains(QStringLiteral("historial")))) {
+            modelDock_ = dock;
+        }
+    }
+
     if (taskDock_ && !compactTaskTitleBar_) {
         compactTaskTitleBar_ = new QWidget(taskDock_);
         compactTaskTitleBar_->setObjectName(QStringLiteral("SolidFreeCADCompactTaskTitleBar"));
@@ -424,6 +446,9 @@ void SolidActiveSketch::updateTaskPanel(bool editing)
     taskDock_->setProperty("SolidFreeCADTaskDockActive", editing);
 
     if (editing) {
+        // Explicit removal breaks any previous tabification or bottom/right dock group.
+        mainWindow_->removeDockWidget(taskDock_);
+        taskDock_->setFloating(false);
         mainWindow_->addDockWidget(Qt::LeftDockWidgetArea, taskDock_);
         if (propertyDock_) {
             propertyDock_->hide();
@@ -441,6 +466,8 @@ void SolidActiveSketch::updateTaskPanel(bool editing)
         return;
     }
 
+    // Outside edit mode, remove the native Tasks dock from every dock group.
+    mainWindow_->removeDockWidget(taskDock_);
     taskDock_->hide();
     QList<QDockWidget*> docks;
     QList<int> sizes;
