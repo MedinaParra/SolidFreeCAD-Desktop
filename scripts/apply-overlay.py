@@ -33,6 +33,13 @@ PROPERTY_SELECTION_INSERT = (
     "    return selected.pResolvedObject ? selected.pResolvedObject : selected.pObject;\n"
 )
 
+MVP_INCLUDE_ANCHOR = "#include <exception>\n"
+MVP_INCLUDE_INSERT = (
+    MVP_INCLUDE_ANCHOR
+    + "#include <algorithm>\n\n"
+    + "#include <QStyle>\n"
+)
+
 SKETCH_EDIT_ANCHOR = "    Workbench::enterEditMode();\n\n"
 SKETCH_EDIT_INSERT = (
     SKETCH_EDIT_ANCHOR
@@ -167,6 +174,16 @@ def apply(repo_root: Path, freecad_root: Path) -> None:
         "Property Manager resolved selection",
     )
     property_manager_file.write_text(property_manager_text, encoding="utf-8")
+
+    mvp_controller_file = destination_overlay / "SolidPartDesignMvp.cpp"
+    mvp_controller_text = mvp_controller_file.read_text(encoding="utf-8")
+    mvp_controller_text = insert_once(
+        mvp_controller_text,
+        MVP_INCLUDE_ANCHOR,
+        MVP_INCLUDE_INSERT,
+        "Part Design MVP explicit includes",
+    )
+    mvp_controller_file.write_text(mvp_controller_text, encoding="utf-8")
 
     cmake_text = cmake_file.read_text(encoding="utf-8")
     cmake_text = insert_once(
