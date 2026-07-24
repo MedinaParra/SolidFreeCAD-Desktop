@@ -1,9 +1,11 @@
 #include "SolidTaskOverlayGuard.h"
 
+#include <QBoxLayout>
 #include <QDockWidget>
 #include <QLabel>
 #include <QList>
 #include <QTimer>
+#include <QToolBar>
 #include <QWidget>
 
 #include <App/DocumentObject.h>
@@ -55,6 +57,34 @@ QDockWidget* parentDock(QWidget* widget)
         current = current->parentWidget();
     }
     return nullptr;
+}
+
+QLabel* createStartupContextBadge(Gui::MainWindow* mainWindow)
+{
+    if (!mainWindow) {
+        return nullptr;
+    }
+    auto* ribbon = mainWindow->findChild<QToolBar*>(QStringLiteral("SolidFreeCADRibbon"));
+    QWidget* shell = ribbon
+        ? ribbon->findChild<QWidget*>(QStringLiteral("SolidFreeCADRibbonShell"))
+        : nullptr;
+    auto* brand = shell
+        ? shell->findChild<QLabel*>(QStringLiteral("SolidFreeCADBrand"))
+        : nullptr;
+    if (!brand || !brand->parentWidget()) {
+        return nullptr;
+    }
+    auto* rowLayout = qobject_cast<QBoxLayout*>(brand->parentWidget()->layout());
+    if (!rowLayout) {
+        return nullptr;
+    }
+
+    auto* badge = new QLabel(QObject::tr("PIEZA"), brand->parentWidget());
+    badge->setObjectName(QStringLiteral("SolidFreeCADContextBadge"));
+    badge->setToolTip(QObject::tr("Entorno de modelado de pieza activo"));
+    const int brandIndex = rowLayout->indexOf(brand);
+    rowLayout->insertWidget(brandIndex >= 0 ? brandIndex + 1 : 1, badge);
+    return badge;
 }
 
 }  // namespace
@@ -156,6 +186,11 @@ void SolidTaskOverlayGuard::synchronizeContextBadges(bool editing)
         const QString name = label->objectName();
         if (name == canonicalName || name.startsWith(replicaPrefix)) {
             badges.append(label);
+        }
+    }
+    if (badges.isEmpty()) {
+        if (QLabel* startupBadge = createStartupContextBadge(mainWindow_)) {
+            badges.append(startupBadge);
         }
     }
     if (badges.isEmpty()) {
