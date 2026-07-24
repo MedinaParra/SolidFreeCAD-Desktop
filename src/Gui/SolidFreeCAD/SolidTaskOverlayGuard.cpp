@@ -145,22 +145,53 @@ void SolidTaskOverlayGuard::synchronizeContextBadges(bool editing)
     if (!mainWindow_) {
         return;
     }
-    const auto badges = mainWindow_->findChildren<QLabel*>(
-        QStringLiteral("SolidFreeCADContextBadge")
-    );
+
+    const QString canonicalName = QStringLiteral("SolidFreeCADContextBadge");
+    const QString replicaPrefix = QStringLiteral("SolidFreeCADContextBadgeReplica");
+    QList<QLabel*> badges;
+    for (QLabel* label : mainWindow_->findChildren<QLabel*>()) {
+        if (!label) {
+            continue;
+        }
+        const QString name = label->objectName();
+        if (name == canonicalName || name.startsWith(replicaPrefix)) {
+            badges.append(label);
+        }
+    }
     if (badges.isEmpty()) {
         return;
     }
 
-    QString text;
-    QString tooltip;
+    QLabel* canonicalBadge = nullptr;
     for (QLabel* badge : badges) {
-        if (badge && badge->isVisible() && !badge->text().isEmpty()) {
-            text = badge->text();
-            tooltip = badge->toolTip();
+        if (badge->isVisible() && !badge->text().isEmpty()) {
+            canonicalBadge = badge;
             break;
         }
     }
+    if (!canonicalBadge) {
+        for (QLabel* badge : badges) {
+            if (badge->objectName() == canonicalName) {
+                canonicalBadge = badge;
+                break;
+            }
+        }
+    }
+    if (!canonicalBadge) {
+        canonicalBadge = badges.front();
+    }
+
+    int replicaIndex = 0;
+    for (QLabel* badge : badges) {
+        if (badge == canonicalBadge) {
+            continue;
+        }
+        badge->setObjectName(replicaPrefix + QString::number(replicaIndex++));
+    }
+    canonicalBadge->setObjectName(canonicalName);
+
+    QString text = canonicalBadge->text();
+    QString tooltip = canonicalBadge->toolTip();
     if (editing) {
         text = tr("EDITANDO CROQUIS");
         tooltip = tr("Croquis activo: vista normal y controles de confirmación");
@@ -175,9 +206,6 @@ void SolidTaskOverlayGuard::synchronizeContextBadges(bool editing)
     }
 
     for (QLabel* badge : badges) {
-        if (!badge) {
-            continue;
-        }
         badge->setText(text);
         badge->setToolTip(tooltip);
         badge->setProperty("SolidFreeCADSketchEditing", editing);
