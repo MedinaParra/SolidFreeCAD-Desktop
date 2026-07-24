@@ -79,6 +79,7 @@ bool SolidTaskOverlayGuard::install(Gui::MainWindow* mainWindow)
 
     mainWindow_ = mainWindow;
     installed_ = true;
+    refresh();
     refreshTimer_ = new QTimer(this);
     refreshTimer_->setInterval(45);
     connect(refreshTimer_, &QTimer::timeout, this, [this]() { refresh(); });
