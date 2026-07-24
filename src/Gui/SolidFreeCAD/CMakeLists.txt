@@ -21,6 +21,8 @@ set(SolidFreeCADGui_SRCS
     SolidRibbonWidget.h
     SolidSketchEnhancements.cpp
     SolidSketchEnhancements.h
+    SolidTaskOverlayGuard.cpp
+    SolidTaskOverlayGuard.h
     SolidWorkspacePolish.cpp
     SolidWorkspacePolish.h
 )
