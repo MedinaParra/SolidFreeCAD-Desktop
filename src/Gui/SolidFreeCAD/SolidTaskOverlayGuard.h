@@ -32,6 +32,7 @@ private:
     Gui::MainWindow* mainWindow_ = nullptr;
     QPointer<QTimer> refreshTimer_;
     bool installed_ = false;
+    bool startupBadgeLock_ = false;
 };
 
 }  // namespace SolidFreeCAD
