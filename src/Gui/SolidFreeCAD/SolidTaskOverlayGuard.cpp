@@ -79,11 +79,16 @@ bool SolidTaskOverlayGuard::install(Gui::MainWindow* mainWindow)
 
     mainWindow_ = mainWindow;
     installed_ = true;
+    startupBadgeLock_ = true;
     refresh();
     refreshTimer_ = new QTimer(this);
     refreshTimer_->setInterval(45);
     connect(refreshTimer_, &QTimer::timeout, this, [this]() { refresh(); });
     refreshTimer_->start();
+    QTimer::singleShot(5000, this, [this]() {
+        startupBadgeLock_ = false;
+        refresh();
+    });
     for (const int delay : {0, 60, 180, 420, 900, 1800, 3200}) {
         QTimer::singleShot(delay, this, [this]() { refresh(); });
     }
@@ -100,6 +105,7 @@ void SolidTaskOverlayGuard::uninstall()
         refreshTimer_->deleteLater();
     }
     refreshTimer_.clear();
+    startupBadgeLock_ = false;
     mainWindow_ = nullptr;
     installed_ = false;
 }
@@ -158,6 +164,10 @@ void SolidTaskOverlayGuard::synchronizeContextBadges(bool editing)
     if (editing) {
         text = tr("EDITANDO CROQUIS");
         tooltip = tr("Croquis activo: vista normal y controles de confirmación");
+    }
+    else if (startupBadgeLock_) {
+        text = tr("PIEZA");
+        tooltip = tr("Entorno de modelado de pieza activo");
     }
     else if (text.isEmpty() || text == tr("EDITANDO CROQUIS")) {
         text = tr("PIEZA");
