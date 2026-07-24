@@ -6,6 +6,7 @@
 #include "SolidPartDesignMvp.h"
 #include "SolidPropertyManager.h"
 #include "SolidSketchEnhancements.h"
+#include "SolidTaskOverlayGuard.h"
 #include "SolidWorkspacePolish.h"
 
 #include <memory>
@@ -27,6 +28,7 @@ std::unique_ptr<SolidWorkspacePolish> workspacePolish;
 std::unique_ptr<SolidDocumentWorkspace> documentWorkspace;
 std::unique_ptr<SolidPartDesignMvp> partDesignMvp;
 std::unique_ptr<SolidActiveSketch> activeSketch;
+std::unique_ptr<SolidTaskOverlayGuard> taskOverlayGuard;
 
 bool classicModeRequestedByEnvironment()
 {
@@ -76,6 +78,9 @@ void installGui(Gui::MainWindow* mainWindow)
     if (!activeSketch) {
         activeSketch = std::make_unique<SolidActiveSketch>();
     }
+    if (!taskOverlayGuard) {
+        taskOverlayGuard = std::make_unique<SolidTaskOverlayGuard>();
+    }
 
     guiManager->install(mainWindow);
     propertyManager->install(mainWindow);
@@ -84,10 +89,12 @@ void installGui(Gui::MainWindow* mainWindow)
     documentWorkspace->install(mainWindow);
     partDesignMvp->install(mainWindow);
     activeSketch->install(mainWindow);
+    taskOverlayGuard->install(mainWindow);
 }
 
 void uninstallGui()
 {
+    taskOverlayGuard.reset();
     activeSketch.reset();
     partDesignMvp.reset();
     documentWorkspace.reset();
