@@ -20,6 +20,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$script:CurrentStage = "initialization"
 
 function Resolve-AbsolutePath {
     param([Parameter(Mandatory)][string]$Path)
@@ -58,6 +59,42 @@ function Find-InnoCompiler {
     throw "Inno Setup compiler ISCC.exe was not found."
 }
 
+function Find-CSharpCompiler {
+    $candidates = @(
+        (Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe"),
+        (Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319\csc.exe")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    $command = Get-Command csc.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    throw "C# compiler csc.exe was not found."
+}
+
+$resolvedOutputForDiagnostics = Resolve-AbsolutePath -Path $OutputDirectory
+trap {
+    New-Item -ItemType Directory -Path $resolvedOutputForDiagnostics -Force | Out-Null
+    $diagnosticPath = Join-Path $resolvedOutputForDiagnostics "alpha3-packaging-error.txt"
+    $details = $_ | Format-List * -Force | Out-String
+    @"
+SolidFreeCAD alpha.3 packaging failure
+Stage: $script:CurrentStage
+UTC: $([DateTime]::UtcNow.ToString("o"))
+
+$details
+"@ | Set-Content -LiteralPath $diagnosticPath -Encoding utf8
+    Write-Error "Alpha.3 packaging failed during '$script:CurrentStage'. Diagnostic: $diagnosticPath"
+    exit 1
+}
+
 foreach ($command in @("robocopy", "7z")) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
         throw "Required command '$command' was not found in PATH."
@@ -65,7 +102,7 @@ foreach ($command in @("robocopy", "7z")) {
 }
 
 $resolvedRuntime = Resolve-AbsolutePath -Path $RuntimeRoot
-$resolvedOutput = Resolve-AbsolutePath -Path $OutputDirectory
+$resolvedOutput = $resolvedOutputForDiagnostics
 $freeCADExecutable = Join-Path $resolvedRuntime "Library/bin/FreeCAD.exe"
 $freeCADCommand = Join-Path $resolvedRuntime "Library/bin/FreeCADCmd.exe"
 $workbenchPath = Join-Path $resolvedRuntime "Library/Mod/SolidFreeCAD/InitGui.py"
@@ -86,6 +123,7 @@ $installerBaseName = "$packageName-Setup"
 $installerPath = Join-Path $resolvedOutput "$installerBaseName.exe"
 $installerChecksumPath = "$installerPath.sha256"
 $issPath = Join-Path $resolvedOutput "$installerBaseName.iss"
+$launcherSourcePath = Join-Path $resolvedOutput "SolidFreeCADLauncher.cs"
 
 foreach ($path in @(
     $stagingDirectory,
@@ -93,13 +131,16 @@ foreach ($path in @(
     $archiveChecksumPath,
     $installerPath,
     $installerChecksumPath,
-    $issPath
+    $issPath,
+    $launcherSourcePath,
+    (Join-Path $resolvedOutput "alpha3-packaging-error.txt")
 )) {
     if (Test-Path -LiteralPath $path) {
         Remove-Item -LiteralPath $path -Recurse -Force
     }
 }
 
+$script:CurrentStage = "copy runtime"
 Write-Host "Creating SolidFreeCAD alpha.3 staging directory..."
 Invoke-Robocopy -Source $resolvedRuntime -Destination $stagingDirectory
 
@@ -112,6 +153,7 @@ Get-ChildItem -LiteralPath $stagingDirectory -File -ErrorAction SilentlyContinue
     } |
     Remove-Item -Force
 
+$script:CurrentStage = "portable configuration"
 $userData = Join-Path $stagingDirectory "UserData"
 $userImages = Join-Path $userData "Gui/images"
 New-Item -ItemType Directory -Path $userImages -Force | Out-Null
@@ -143,50 +185,93 @@ $systemConfig = @'
 Set-Content -LiteralPath (Join-Path $userData "user.cfg") -Value $userConfig -Encoding utf8
 Set-Content -LiteralPath (Join-Path $userData "system.cfg") -Value $systemConfig -Encoding utf8
 
+$script:CurrentStage = "splash generation"
 Write-Host "Generating SolidFreeCAD splash image..."
 Add-Type -AssemblyName System.Drawing
 $width = 1024
 $height = 576
-$bitmap = New-Object System.Drawing.Bitmap($width, $height)
+$bitmap = [System.Drawing.Bitmap]::new($width, $height)
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-$rectangle = New-Object System.Drawing.Rectangle(0, 0, $width, $height)
-$background = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+$rectangle = [System.Drawing.Rectangle]::new(0, 0, $width, $height)
+$background = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
     $rectangle,
     [System.Drawing.Color]::FromArgb(16, 31, 50),
     [System.Drawing.Color]::FromArgb(36, 94, 160),
     25.0
 )
-$graphics.FillRectangle($background, $rectangle)
+$accent = [System.Drawing.SolidBrush]::new(
+    [System.Drawing.Color]::FromArgb(70, 155, 255)
+)
+$hole = [System.Drawing.SolidBrush]::new(
+    [System.Drawing.Color]::FromArgb(23, 50, 88)
+)
+$white = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
+$muted = [System.Drawing.SolidBrush]::new(
+    [System.Drawing.Color]::FromArgb(205, 222, 240)
+)
+$titleFont = [System.Drawing.Font]::new(
+    "Segoe UI",
+    54,
+    [System.Drawing.FontStyle]::Bold
+)
+$subtitleFont = [System.Drawing.Font]::new(
+    "Segoe UI",
+    21,
+    [System.Drawing.FontStyle]::Regular
+)
+$smallFont = [System.Drawing.Font]::new(
+    "Segoe UI",
+    13,
+    [System.Drawing.FontStyle]::Regular
+)
 
-$accent = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(70, 155, 255))
-$white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-$muted = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(205, 222, 240))
-$titleFont = New-Object System.Drawing.Font("Segoe UI", 54, [System.Drawing.FontStyle]::Bold)
-$subtitleFont = New-Object System.Drawing.Font("Segoe UI", 21, [System.Drawing.FontStyle]::Regular)
-$smallFont = New-Object System.Drawing.Font("Segoe UI", 13, [System.Drawing.FontStyle]::Regular)
+try {
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $graphics.FillRectangle($background, $rectangle)
+    $graphics.FillEllipse($accent, 72, 156, 150, 150)
+    $graphics.FillEllipse($hole, 112, 196, 70, 70)
+    $graphics.FillRectangle($accent, 36, 211, 222, 40)
+    $graphics.FillRectangle($accent, 127, 120, 40, 222)
+    $graphics.DrawString("SolidFreeCAD", $titleFont, $white, 300, 175)
+    $graphics.DrawString(
+        "Diseño mecánico paramétrico para Windows",
+        $subtitleFont,
+        $muted,
+        304,
+        252
+    )
+    $graphics.DrawString(
+        "Motor FreeCAD $FreeCADTag · SolidFreeCAD $ProductVersion",
+        $smallFont,
+        $muted,
+        306,
+        315
+    )
+    $graphics.DrawString(
+        "Portable · local · sin servicios externos",
+        $smallFont,
+        $muted,
+        306,
+        348
+    )
 
-$graphics.FillEllipse($accent, 72, 156, 150, 150)
-$graphics.FillEllipse($background, 112, 196, 70, 70)
-$graphics.FillRectangle($accent, 36, 211, 222, 40)
-$graphics.FillRectangle($accent, 127, 120, 40, 222)
-$graphics.DrawString("SolidFreeCAD", $titleFont, $white, 300, 175)
-$graphics.DrawString("Diseño mecánico paramétrico para Windows", $subtitleFont, $muted, 304, 252)
-$graphics.DrawString("Motor FreeCAD $FreeCADTag · SolidFreeCAD $ProductVersion", $smallFont, $muted, 306, 315)
-$graphics.DrawString("Portable · local · sin servicios externos", $smallFont, $muted, 306, 348)
+    $splashPath = Join-Path $userImages "splash_image.png"
+    $bitmap.Save($splashPath, [System.Drawing.Imaging.ImageFormat]::Png)
+}
+finally {
+    $graphics.Dispose()
+    $bitmap.Dispose()
+    $background.Dispose()
+    $accent.Dispose()
+    $hole.Dispose()
+    $white.Dispose()
+    $muted.Dispose()
+    $titleFont.Dispose()
+    $subtitleFont.Dispose()
+    $smallFont.Dispose()
+}
 
-$splashPath = Join-Path $userImages "splash_image.png"
-$bitmap.Save($splashPath, [System.Drawing.Imaging.ImageFormat]::Png)
-$graphics.Dispose()
-$bitmap.Dispose()
-$background.Dispose()
-$accent.Dispose()
-$white.Dispose()
-$muted.Dispose()
-$titleFont.Dispose()
-$subtitleFont.Dispose()
-$smallFont.Dispose()
-
+$script:CurrentStage = "launcher compilation"
 Write-Host "Compiling graphical SolidFreeCAD launcher..."
 $launcherSource = @'
 using System;
@@ -249,17 +334,24 @@ internal static class SolidFreeCADLauncher
 }
 '@
 
+Set-Content -LiteralPath $launcherSourcePath -Value $launcherSource -Encoding utf8
 $launcherPath = Join-Path $stagingDirectory "SolidFreeCADLauncher.exe"
-Add-Type `
-    -TypeDefinition $launcherSource `
-    -Language CSharp `
-    -OutputAssembly $launcherPath `
-    -OutputType WindowsApplication
+$csharpCompiler = Find-CSharpCompiler
+& $csharpCompiler `
+    /nologo `
+    /target:winexe `
+    /optimize+ `
+    "/out:$launcherPath" `
+    $launcherSourcePath
+if ($LASTEXITCODE -ne 0) {
+    throw "SolidFreeCAD launcher compilation failed with exit code $LASTEXITCODE."
+}
 
 if (-not (Test-Path -LiteralPath $launcherPath)) {
     throw "SolidFreeCADLauncher.exe was not generated."
 }
 
+$script:CurrentStage = "metadata and example"
 $readme = @"
 SolidFreeCAD Desktop - Windows alpha.3
 ======================================
@@ -322,6 +414,7 @@ $metadata | ConvertTo-Json -Depth 5 | Set-Content `
     -LiteralPath (Join-Path $stagingDirectory "BUILD-METADATA.json") `
     -Encoding utf8
 
+$script:CurrentStage = "portable compression"
 Write-Host "Compressing SolidFreeCAD portable archive..."
 & 7z a -t7z -mx=5 -mmt=on $archivePath (Join-Path $stagingDirectory "*")
 if ($LASTEXITCODE -ne 0) {
@@ -333,11 +426,10 @@ $archiveChecksum = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Ha
     -LiteralPath $archiveChecksumPath `
     -Encoding ascii
 
-$escapedSource = $stagingDirectory.Replace("\", "\\")
-$escapedOutput = $resolvedOutput.Replace("\", "\\")
+$script:CurrentStage = "installer compilation"
 $innoScript = @"
 #define ProductVersion "$ProductVersion"
-#define SourceRoot "$escapedSource"
+#define SourceRoot "$stagingDirectory"
 
 [Setup]
 AppId={{7D1BC0D3-4672-4AA2-91B4-53D7198E7334}
@@ -347,7 +439,7 @@ AppPublisher=MedinaParra
 AppPublisherURL=https://github.com/MedinaParra/SolidFreeCAD-Desktop
 DefaultDirName={autopf}\SolidFreeCAD
 DefaultGroupName=SolidFreeCAD
-OutputDir=$escapedOutput
+OutputDir=$resolvedOutput
 OutputBaseFilename=$installerBaseName
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -389,6 +481,7 @@ $installerChecksum = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256
     -LiteralPath $installerChecksumPath `
     -Encoding ascii
 
+$script:CurrentStage = "complete"
 Write-Host "SolidFreeCAD alpha.3 packages created."
 Write-Host "Portable: $archivePath"
 Write-Host "Installer: $installerPath"
