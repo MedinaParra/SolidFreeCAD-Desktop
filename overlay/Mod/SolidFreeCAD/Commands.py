@@ -1,0 +1,70 @@
+"""GUI commands exposed by the SolidFreeCAD workbench."""
+
+from __future__ import annotations
+
+import FreeCAD as App
+import FreeCADGui as Gui
+
+from SolidFreeCAD.ShaftFeature import create_shaft
+
+
+class CreateShaftCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Crear eje paramétrico",
+            "ToolTip": (
+                "Crea un eje escalonado editable con diámetros, longitudes "
+                "y chavetero configurables desde el panel de propiedades."
+            ),
+        }
+
+    def IsActive(self):
+        return True
+
+    def Activated(self):
+        obj = create_shaft()
+        Gui.activeDocument().activeView().viewAxonometric()
+        Gui.activeDocument().activeView().fitAll()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(obj)
+
+
+class CreatePartCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Nueva pieza mecánica",
+            "ToolTip": "Crea un documento y un Body de Part Design.",
+        }
+
+    def IsActive(self):
+        return True
+
+    def Activated(self):
+        doc = App.newDocument("SolidFreeCADPart")
+        body = doc.addObject("PartDesign::Body", "Body")
+        body.Label = "Pieza"
+        doc.recompute()
+        Gui.activeDocument().activeView().viewAxonometric()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(body)
+
+
+class FitAndAxonometricCommand:
+    def GetResources(self):
+        return {
+            "MenuText": "Vista isométrica ajustada",
+            "ToolTip": "Cambia a vista isométrica y ajusta el modelo a la pantalla.",
+        }
+
+    def IsActive(self):
+        return App.ActiveDocument is not None
+
+    def Activated(self):
+        view = Gui.activeDocument().activeView()
+        view.viewAxonometric()
+        view.fitAll()
+
+
+Gui.addCommand("SFC_CreateShaft", CreateShaftCommand())
+Gui.addCommand("SFC_CreatePart", CreatePartCommand())
+Gui.addCommand("SFC_FitAxonometric", FitAndAxonometricCommand())
