@@ -1,0 +1,140 @@
+name: Windows x64 build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "agent/**"
+      - "product/**"
+    paths:
+      - ".github/workflows/windows-build.yml"
+      - "platform/windows/**"
+      - "scripts/windows/**"
+      - "README.md"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-build.yml"
+      - "platform/windows/**"
+      - "scripts/windows/**"
+      - "README.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-x64-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FREECAD_TAG: "1.1.1"
+  SOLIDFREECAD_VERSION: "0.1.0-alpha.1"
+  PIXI_CACHE_DIR: "D:\\rattler"
+  RATTLER_CACHE_DIR: "D:\\rattler"
+
+jobs:
+  build-windows-x64:
+    name: Build Windows x64 portable baseline
+    runs-on: windows-2022
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+        with:
+          pixi-version: v0.68.1
+          cache: false
+
+      - name: Validate Windows PowerShell scripts
+        shell: pwsh
+        run: |
+          $scripts = @(
+            "scripts/windows/Bootstrap-FreeCAD.ps1",
+            "scripts/windows/Build-FreeCAD.ps1",
+            "scripts/windows/Package-Portable.ps1"
+          )
+
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            )
+
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Error
+              throw "PowerShell syntax validation failed: $script"
+            }
+          }
+
+          Write-Host "All Windows PowerShell scripts have valid syntax."
+
+      - name: Bootstrap official FreeCAD source
+        id: bootstrap
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP "FreeCAD-source"
+          ./scripts/windows/Bootstrap-FreeCAD.ps1 `
+            -Tag $env:FREECAD_TAG `
+            -Destination $source `
+            -Force
+
+          $revision = (git -C $source rev-parse HEAD).Trim()
+          "FREECAD_SOURCE=$source" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FREECAD_UPSTREAM_COMMIT=$revision" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build FreeCAD Release with MSVC and Pixi
+        shell: pwsh
+        run: |
+          ./scripts/windows/Build-FreeCAD.ps1 `
+            -SourceDirectory $env:FREECAD_SOURCE `
+            -Jobs 2
+
+      - name: Package portable Windows baseline
+        shell: pwsh
+        run: |
+          ./scripts/windows/Package-Portable.ps1 `
+            -SourceDirectory $env:FREECAD_SOURCE `
+            -OutputDirectory "dist" `
+            -ProductVersion $env:SOLIDFREECAD_VERSION `
+            -FreeCADTag $env:FREECAD_TAG
+
+      - name: List generated packages
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath "dist" -File | ForEach-Object {
+            "{0} ({1:N2} MiB)" -f $_.Name, ($_.Length / 1MB)
+          }
+
+      - name: Upload Windows portable baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Portable-Baseline
+          path: |
+            dist/*.7z
+            dist/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Publish build summary
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## SolidFreeCAD Windows x64 baseline
+
+          - SolidFreeCAD version: ``$env:SOLIDFREECAD_VERSION``
+          - FreeCAD tag: ``$env:FREECAD_TAG``
+          - FreeCAD commit: ``$env:FREECAD_UPSTREAM_COMMIT``
+          - Runner: ``windows-2022``
+          - Toolchain: MSVC 2022 through the official FreeCAD Pixi environment
+          - Ubuntu track: preserved and unchanged
+
+          This artifact is an unbranded engine baseline. SolidFreeCAD interface and branding changes are intentionally deferred until the Windows runtime is proven reproducible.
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
