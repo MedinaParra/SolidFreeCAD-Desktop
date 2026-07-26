@@ -1,6 +1,6 @@
 """Graphical smoke test for the SolidFreeCAD classic Windows workspace.
 
-Run with FreeCAD.exe, not FreeCADCmd.exe.
+Run with FreeCAD.exe, not FreeCADCmd.exe or FreeCAD.exe --console.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def run():
         if not os.path.isdir(icon_root):
             raise RuntimeError("Classic icon directory was not created")
 
-        workspace = show_workspace()
+        show_workspace()
         main = Gui.getMainWindow()
         command_manager = main.findChild(
             QtWidgets.QDockWidget, "SolidFreeCADClassicCommandManager"
@@ -62,9 +62,9 @@ def run():
         doc.recompute()
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(body)
+        QtWidgets.QApplication.processEvents()
 
-        if property_manager.selection_label.text() == "Sin selección":
-            property_manager.refresh_selection()
+        property_manager.refresh_selection()
         if property_manager.selection_label.text() == "Sin selección":
             raise RuntimeError("PropertyManager did not track the selected Body")
 
@@ -77,9 +77,11 @@ def run():
         command_manager.show()
         property_manager.show()
         main.show()
+        QtWidgets.QApplication.processEvents()
         finish(True, "Classic CommandManager, PropertyManager and piece flow validated")
     except Exception:
         finish(False, traceback.format_exc())
 
 
-QtCore.QTimer.singleShot(1200, run)
+Gui.showMainWindow()
+QtCore.QTimer.singleShot(1500, run)
