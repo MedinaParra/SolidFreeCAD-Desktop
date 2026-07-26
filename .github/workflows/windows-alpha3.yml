@@ -1,0 +1,264 @@
+name: Windows alpha3 branded installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "agent/windows-solidfreecad-alpha3-branding-installer"
+      - "product/**"
+    paths:
+      - ".github/workflows/windows-alpha3.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "scripts/alpha3-windows/**"
+      - "scripts/windows/Install-SolidFreeCAD-Overlay.ps1"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-alpha3.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "scripts/alpha3-windows/**"
+      - "scripts/windows/Install-SolidFreeCAD-Overlay.ps1"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: windows-alpha3-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ALPHA2_RUN_ID: "30199505362"
+  ALPHA2_ARTIFACT: "SolidFreeCAD-0.1.0-alpha.2-Windows-x64-Portable-Preview"
+  FREECAD_TAG: "1.1.1"
+  FREECAD_COMMIT: "0108fd4b4850cc46e625b60e53cea7a7bbe69f8d"
+  SOLIDFREECAD_VERSION: "0.1.0-alpha.3"
+
+jobs:
+  package-alpha3:
+    name: Test, brand and package SolidFreeCAD alpha3
+    runs-on: windows-2022
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Download validated alpha2 runtime
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+        with:
+          name: ${{ env.ALPHA2_ARTIFACT }}
+          path: alpha2-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.ALPHA2_RUN_ID }}
+
+      - name: Validate PowerShell and Python sources
+        shell: pwsh
+        run: |
+          $scripts = @(
+            "scripts/windows/Install-SolidFreeCAD-Overlay.ps1",
+            "scripts/alpha3-windows/Package-Alpha3.ps1"
+          )
+
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            )
+
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Error
+              throw "PowerShell syntax validation failed: $script"
+            }
+          }
+
+          $pythonFiles = Get-ChildItem -Path "overlay", "tests" -Filter "*.py" -Recurse
+          foreach ($pythonFile in $pythonFiles) {
+            python -m py_compile $pythonFile.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Python syntax validation failed: $($pythonFile.FullName)"
+            }
+          }
+
+      - name: Ensure Inno Setup compiler
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          )
+          $compiler = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
+            Select-Object -First 1
+
+          if (-not $compiler) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) {
+              throw "Unable to install Inno Setup."
+            }
+          }
+
+      - name: Expand validated alpha2 runtime
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -LiteralPath "alpha2-artifact" -Filter "*.7z" -File |
+            Select-Object -First 1
+
+          if (-not $archive) {
+            throw "The alpha2 artifact does not contain a .7z runtime."
+          }
+
+          $sourceRoot = Join-Path $env:RUNNER_TEMP "FreeCAD-source"
+          $runtimeRoot = Join-Path $sourceRoot ".pixi/envs/default"
+          New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
+
+          & 7z x $archive.FullName "-o$runtimeRoot" -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to extract the alpha2 runtime."
+          }
+
+          $command = Join-Path $runtimeRoot "Library/bin/FreeCADCmd.exe"
+          if (-not (Test-Path -LiteralPath $command)) {
+            throw "Extracted runtime is missing FreeCADCmd.exe: $command"
+          }
+
+          "FREECAD_SOURCE=$sourceRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "FREECAD_RUNTIME=$runtimeRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install alpha3 SolidFreeCAD overlay
+        shell: pwsh
+        run: |
+          ./scripts/windows/Install-SolidFreeCAD-Overlay.ps1 `
+            -SourceDirectory $env:FREECAD_SOURCE `
+            -OverlayDirectory "overlay" `
+            -Force
+
+      - name: Run parametric shaft regression test
+        shell: pwsh
+        run: |
+          $command = Join-Path $env:FREECAD_RUNTIME "Library/bin/FreeCADCmd.exe"
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          $example = Join-Path $env:RUNNER_TEMP "Eje-Parametrico-Demo.FCStd"
+
+          try {
+            $env:PATH = "$(Join-Path $env:FREECAD_RUNTIME 'Library/bin');$env:FREECAD_RUNTIME;$(Join-Path $env:FREECAD_RUNTIME 'Scripts');$previousPath"
+            $env:PYTHONHOME = $env:FREECAD_RUNTIME
+            $env:SOLIDFREECAD_SMOKE_FCSTD = $example
+
+            & $command "tests/solidfreecad_shaft_smoke.py"
+            if ($LASTEXITCODE -ne 0) {
+              throw "SolidFreeCAD shaft regression test failed with exit code $LASTEXITCODE."
+            }
+          }
+          finally {
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+
+          if (-not (Test-Path -LiteralPath $example)) {
+            throw "The shaft test did not generate the FCStd example."
+          }
+
+          "SOLIDFREECAD_EXAMPLE=$example" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build branded portable and installer
+        shell: pwsh
+        run: |
+          ./scripts/alpha3-windows/Package-Alpha3.ps1 `
+            -RuntimeRoot $env:FREECAD_RUNTIME `
+            -OutputDirectory "dist" `
+            -ProductVersion $env:SOLIDFREECAD_VERSION `
+            -FreeCADTag $env:FREECAD_TAG `
+            -FreeCADCommit $env:FREECAD_COMMIT `
+            -SolidFreeCADCommit $env:GITHUB_SHA `
+            -ExampleFile $env:SOLIDFREECAD_EXAMPLE
+
+      - name: Upload alpha3 packaging diagnostic
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha3-packaging-diagnostic
+          path: dist/alpha3-packaging-error.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Validate isolated portable configuration
+        shell: pwsh
+        run: |
+          $staging = Join-Path (Resolve-Path "dist") "SolidFreeCAD-$env:SOLIDFREECAD_VERSION-FreeCAD-$env:FREECAD_TAG-Windows-x64-Portable"
+          $command = Join-Path $staging "Library/bin/FreeCADCmd.exe"
+          $userConfig = Join-Path $staging "UserData/user.cfg"
+          $systemConfig = Join-Path $staging "UserData/system.cfg"
+          $splash = Join-Path $staging "UserData/Gui/images/splash_image.png"
+          $launcher = Join-Path $staging "SolidFreeCADLauncher.exe"
+
+          foreach ($required in @($command, $userConfig, $systemConfig, $splash, $launcher)) {
+            if (-not (Test-Path -LiteralPath $required)) {
+              throw "Alpha3 package is missing: $required"
+            }
+          }
+
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $staging 'Library/bin');$staging;$(Join-Path $staging 'Scripts');$previousPath"
+            $env:PYTHONHOME = $staging
+            $env:FREECAD_USER_HOME = Join-Path $staging "UserData"
+            $env:FREECAD_USER_DATA = Join-Path $staging "UserData"
+
+            & $command `
+              --user-cfg $userConfig `
+              --system-cfg $systemConfig `
+              "tests/solidfreecad_portable_config_smoke.py"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Portable configuration smoke test failed with exit code $LASTEXITCODE."
+            }
+          }
+          finally {
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+
+      - name: Upload alpha3 portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Portable
+          path: |
+            dist/*-Portable.7z
+            dist/*-Portable.7z.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload alpha3 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Setup
+          path: |
+            dist/*-Setup.exe
+            dist/*-Setup.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish alpha3 summary
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## SolidFreeCAD Windows alpha.3
+
+          - SolidFreeCAD version: ``$env:SOLIDFREECAD_VERSION``
+          - FreeCAD engine: ``$env:FREECAD_TAG``
+          - Default workbench: ``SolidFreeCADWorkbench``
+          - Portable configuration: isolated
+          - Branding: launcher, splash, title and icon
+          - Shaft editor: simplified dockable panel
+          - Deliverables: portable ``.7z`` and Windows ``Setup.exe``
+          - Ubuntu track: preserved and unchanged
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

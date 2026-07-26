@@ -35,7 +35,9 @@ $requiredFiles = @(
     "Init.py",
     "InitGui.py",
     "Commands.py",
-    "ShaftFeature.py"
+    "ShaftFeature.py",
+    "PropertyPanel.py",
+    "Resources/icons/SolidFreeCAD.svg"
 )
 
 foreach ($file in $requiredFiles) {
@@ -56,9 +58,9 @@ if (Test-Path -LiteralPath $moduleDestination) {
 New-Item -ItemType Directory -Path $moduleDestination -Force | Out-Null
 Copy-Item -Path (Join-Path $moduleSource "*") -Destination $moduleDestination -Recurse -Force
 
-$installedFiles = Get-ChildItem -LiteralPath $moduleDestination -File | Select-Object -ExpandProperty Name
 foreach ($file in $requiredFiles) {
-    if ($installedFiles -notcontains $file) {
+    $installedPath = Join-Path $moduleDestination $file
+    if (-not (Test-Path -LiteralPath $installedPath)) {
         throw "Overlay installation verification failed for: $file"
     }
 }

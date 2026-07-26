@@ -6,10 +6,22 @@ import FreeCAD as App
 import Part
 
 
+FEATURE_KIND = "SteppedShaft"
+
+
 class ShaftProxy:
     """Creates a two-diameter stepped shaft aligned to the global X axis."""
 
     def __init__(self, obj):
+        obj.addProperty(
+            "App::PropertyString",
+            "SolidFreeCADFeature",
+            "SolidFreeCAD",
+            "Internal SolidFreeCAD feature identifier.",
+        )
+        obj.setEditorMode("SolidFreeCADFeature", 1)
+        obj.SolidFreeCADFeature = FEATURE_KIND
+
         obj.addProperty(
             "App::PropertyLength",
             "MainLength",
@@ -114,6 +126,25 @@ class ShaftProxy:
 
     def onDocumentRestored(self, obj):
         obj.Proxy = self
+        if "SolidFreeCADFeature" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyString",
+                "SolidFreeCADFeature",
+                "SolidFreeCAD",
+                "Internal SolidFreeCAD feature identifier.",
+            )
+        obj.SolidFreeCADFeature = FEATURE_KIND
+        obj.setEditorMode("SolidFreeCADFeature", 1)
+
+
+def is_shaft(obj):
+    """Return True when *obj* is a SolidFreeCAD stepped shaft."""
+
+    return bool(
+        obj
+        and "SolidFreeCADFeature" in getattr(obj, "PropertiesList", [])
+        and obj.SolidFreeCADFeature == FEATURE_KIND
+    )
 
 
 def create_shaft(document=None, name="SolidFreeCADShaft"):

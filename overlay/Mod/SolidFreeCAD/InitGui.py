@@ -1,6 +1,16 @@
 """SolidFreeCAD mechanical-design workbench registration."""
 
+from __future__ import annotations
+
+import os
+
+import FreeCAD as App
 import FreeCADGui as Gui
+from PySide import QtGui, QtWidgets
+
+
+_MODULE_DIR = os.path.dirname(__file__)
+_ICON_PATH = os.path.join(_MODULE_DIR, "Resources", "icons", "SolidFreeCAD.svg")
 
 
 def _available(command_names):
@@ -8,9 +18,23 @@ def _available(command_names):
     return [command for command in command_names if command in registered]
 
 
+def _apply_window_branding():
+    main_window = Gui.getMainWindow()
+    main_window.setWindowTitle("SolidFreeCAD Desktop")
+    main_window.setWindowIcon(QtGui.QIcon(_ICON_PATH))
+
+    status_label = main_window.findChild(QtWidgets.QLabel, "SolidFreeCADStatusBrand")
+    if status_label is None:
+        status_label = QtWidgets.QLabel("SolidFreeCAD · Mechanical CAD")
+        status_label.setObjectName("SolidFreeCADStatusBrand")
+        status_label.setStyleSheet("font-weight: 600; padding: 0 8px;")
+        main_window.statusBar().addPermanentWidget(status_label)
+
+
 class SolidFreeCADWorkbench(Gui.Workbench):
     MenuText = "SolidFreeCAD"
     ToolTip = "Diseño mecánico paramétrico basado en FreeCAD"
+    Icon = _ICON_PATH
 
     def Initialize(self):
         from SolidFreeCAD import Commands  # noqa: F401
@@ -41,6 +65,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
             [
                 "SFC_CreatePart",
                 "SFC_CreateShaft",
+                "SFC_ShowShaftPanel",
                 "PartDesign_Body",
                 "Sketcher_NewSketch",
                 "PartDesign_Pad",
@@ -74,11 +99,18 @@ class SolidFreeCADWorkbench(Gui.Workbench):
             self.appendMenu("Vista", view_commands)
 
     def Activated(self):
-        main_window = Gui.getMainWindow()
-        main_window.setWindowTitle("SolidFreeCAD Desktop")
+        from SolidFreeCAD.PropertyPanel import show_panel
+
+        _apply_window_branding()
+        general = App.ParamGet("User parameter:BaseApp/Preferences/General")
+        general.SetString("AutoloadModule", "SolidFreeCADWorkbench")
+        general.SetString("LastModule", "SolidFreeCADWorkbench")
+        show_panel()
 
     def Deactivated(self):
-        pass
+        from SolidFreeCAD.PropertyPanel import hide_panel
+
+        hide_panel()
 
     def GetClassName(self):
         return "Gui::PythonWorkbench"
