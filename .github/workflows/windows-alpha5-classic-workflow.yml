@@ -69,7 +69,11 @@ jobs:
           $packIcons = Join-Path $packRoot "icons"
           New-Item -ItemType Directory -Path $packIcons -Force | Out-Null
           Copy-Item -Path (Join-Path $classicRoot "*") -Destination $packIcons -Recurse -Force
-          Copy-Item -LiteralPath "README.md" -Destination (Join-Path $packRoot "REPOSITORY-README.md") -ErrorAction SilentlyContinue
+          @"
+          # SolidFreeCAD Classic Icon Pack v3
+
+          75 original SVG icons, 24 x 24 viewBox, thin 0.72 stroke.
+          "@ | Set-Content -LiteralPath (Join-Path $packRoot "README.md") -Encoding utf8
           "SFC_CLASSIC_ICON_PACK=$packRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Ensure Inno Setup compiler
@@ -109,7 +113,6 @@ jobs:
           }
           New-Item -ItemType Directory -Path $destination -Force | Out-Null
           Copy-Item -Path (Join-Path $source "*") -Destination $destination -Recurse -Force
-
           $classicIcons = Join-Path $destination "Resources/icons/classic"
           $iconCount = (Get-ChildItem -LiteralPath $classicIcons -Filter "*.svg" -File -Recurse).Count
           if ($iconCount -ne 75) { throw "Expected 75 classic SVG icons in runtime, found $iconCount." }
@@ -142,12 +145,16 @@ jobs:
       - name: Run graphical classic workflow smoke test
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           $runtime = $env:SOLIDFREECAD_RUNTIME
           $freecad = Join-Path $runtime "Library/bin/FreeCAD.exe"
           $marker = Join-Path $env:RUNNER_TEMP "classic-gui-smoke.txt"
           $fcstd = Join-Path $env:RUNNER_TEMP "Classic-Workflow-Smoke.FCStd"
+          $stdout = Join-Path (Resolve-Path "dist") "classic-gui-stdout.txt"
+          $stderr = Join-Path (Resolve-Path "dist") "classic-gui-stderr.txt"
           $userConfig = Join-Path $runtime "UserData/user.cfg"
           $systemConfig = Join-Path $runtime "UserData/system.cfg"
+          $scriptPath = (Resolve-Path "tests/solidfreecad_classic_gui_smoke.py").Path
           $previousPath = $env:PATH
           $previousPythonHome = $env:PYTHONHOME
           try {
@@ -162,14 +169,14 @@ jobs:
             $env:SOLIDFREECAD_GUI_SMOKE_MARKER = $marker
             $env:SOLIDFREECAD_CLASSIC_SMOKE_FCSTD = $fcstd
 
+            # A .py file passed directly to FreeCAD.exe runs inside the GUI event loop.
             $arguments = @(
               "--user-cfg", $userConfig,
               "--system-cfg", $systemConfig,
-              "--console",
-              (Resolve-Path "tests/solidfreecad_classic_gui_smoke.py")
+              $scriptPath
             )
-            $process = Start-Process -FilePath $freecad -ArgumentList $arguments -PassThru
-            $deadline = (Get-Date).AddSeconds(75)
+            $process = Start-Process -FilePath $freecad -ArgumentList $arguments -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            $deadline = (Get-Date).AddSeconds(90)
             while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
               Start-Sleep -Seconds 2
               $process.Refresh()
@@ -179,7 +186,7 @@ jobs:
               throw "Classic GUI smoke test timed out."
             }
             if (-not (Test-Path -LiteralPath $marker)) {
-              throw "Classic GUI smoke test did not write its marker."
+              throw "Classic GUI smoke test did not write its marker. FreeCAD exit code: $($process.ExitCode)."
             }
             $result = Get-Content -LiteralPath $marker -Raw
             Write-Host $result
@@ -187,6 +194,9 @@ jobs:
             if (-not (Test-Path -LiteralPath $fcstd)) { throw "Classic workflow FCStd was not created." }
           }
           finally {
+            if (Test-Path -LiteralPath $marker) {
+              Copy-Item -LiteralPath $marker -Destination "dist/classic-gui-smoke.txt" -Force
+            }
             $env:PATH = $previousPath
             $env:PYTHONHOME = $previousPythonHome
           }
@@ -265,7 +275,9 @@ jobs:
           name: SolidFreeCAD-alpha5-diagnostics
           path: |
             dist/alpha4-packaging-error.txt
-            ${{ runner.temp }}/classic-gui-smoke.txt
+            dist/classic-gui-smoke.txt
+            dist/classic-gui-stdout.txt
+            dist/classic-gui-stderr.txt
           if-no-files-found: ignore
           retention-days: 7
 
