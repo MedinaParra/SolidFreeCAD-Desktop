@@ -37,11 +37,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
     Icon = _ICON_PATH
 
     def Initialize(self):
-        from SolidFreeCAD import Commands  # noqa: F401
-
-        # Importing these GUI modules registers their native command sets.
-        # The imports remain optional so a reduced FreeCAD build can still
-        # start the SolidFreeCAD workbench with the commands it provides.
+        # Register native command sets before creating SolidFreeCAD wrappers.
         try:
             import PartDesignGui  # noqa: F401
         except ImportError:
@@ -52,27 +48,27 @@ class SolidFreeCADWorkbench(Gui.Workbench):
         except ImportError:
             pass
 
+        from SolidFreeCAD import Commands  # noqa: F401
+
         file_commands = _available(
             [
-                "Std_New",
-                "Std_Open",
-                "Std_Save",
+                "SFC_CreatePart",
+                "SFC_Open",
+                "SFC_Save",
                 "Std_Undo",
                 "Std_Redo",
             ]
         )
         mechanical_commands = _available(
             [
-                "SFC_CreatePart",
+                "SFC_NewSketch",
+                "SFC_Pad",
+                "SFC_Pocket",
+                "SFC_Revolution",
+                "SFC_Fillet",
+                "SFC_Chamfer",
                 "SFC_CreateShaft",
                 "SFC_ShowShaftPanel",
-                "PartDesign_Body",
-                "Sketcher_NewSketch",
-                "PartDesign_Pad",
-                "PartDesign_Pocket",
-                "PartDesign_Revolution",
-                "PartDesign_Fillet",
-                "PartDesign_Chamfer",
             ]
         )
         view_commands = _available(
