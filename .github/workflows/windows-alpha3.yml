@@ -178,6 +178,15 @@ jobs:
             -SolidFreeCADCommit $env:GITHUB_SHA `
             -ExampleFile $env:SOLIDFREECAD_EXAMPLE
 
+      - name: Upload alpha3 packaging diagnostic
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha3-packaging-diagnostic
+          path: dist/alpha3-packaging-error.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Validate isolated portable configuration
         shell: pwsh
         run: |
