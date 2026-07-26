@@ -1,0 +1,103 @@
+name: Windows foundation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - "agent/**"
+      - "product/**"
+    paths:
+      - ".github/workflows/windows-foundation.yml"
+      - "docs/**"
+      - "platform/windows/**"
+      - "scripts/windows/**"
+      - "README.md"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-foundation.yml"
+      - "docs/**"
+      - "platform/windows/**"
+      - "scripts/windows/**"
+      - "README.md"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-windows-foundation:
+    name: Validate Windows foundation
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Validate repository separation
+        shell: pwsh
+        run: |
+          $requiredPaths = @(
+            "docs/platform-strategy.md",
+            "platform/windows/README.md",
+            "platform/ubuntu/README.md",
+            "scripts/windows/Bootstrap-FreeCAD.ps1"
+          )
+
+          foreach ($path in $requiredPaths) {
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Required platform file is missing: $path"
+            }
+          }
+
+          Write-Host "Windows and Ubuntu platform tracks are present."
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "scripts/windows/Bootstrap-FreeCAD.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          )
+
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Error
+            throw "PowerShell syntax validation failed."
+          }
+
+          Write-Host "PowerShell syntax is valid."
+
+      - name: Bootstrap official FreeCAD source
+        shell: pwsh
+        run: |
+          ./scripts/windows/Bootstrap-FreeCAD.ps1 `
+            -Destination "$env:RUNNER_TEMP/FreeCAD-source"
+
+      - name: Record upstream revision
+        shell: pwsh
+        run: |
+          $source = "$env:RUNNER_TEMP/FreeCAD-source"
+          $revision = git -C $source rev-parse HEAD
+          "FREECAD_UPSTREAM_COMMIT=$revision" | Out-File `
+            -FilePath $env:GITHUB_ENV `
+            -Encoding utf8 `
+            -Append
+          Write-Host "Validated FreeCAD upstream commit: $revision"
+
+      - name: Publish workflow summary
+        shell: pwsh
+        run: |
+          @"
+          ## Windows foundation validation
+
+          - Platform separation: passed
+          - Ubuntu continuity files: present
+          - Windows PowerShell syntax: passed
+          - Official FreeCAD source bootstrap: passed
+          - Upstream commit: ``$env:FREECAD_UPSTREAM_COMMIT``
+
+          This workflow validates the repository foundation only. Compilation and packaging will be introduced in a dedicated follow-up change.
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
