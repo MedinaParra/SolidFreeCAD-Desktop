@@ -5,9 +5,12 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import SolidFreeCAD as SolidFreeCADPackage
 from PySide import QtGui, QtWidgets
 
-_MODULE_DIR = os.path.dirname(__file__)
+# FreeCAD executes InitGui.py through its workbench loader, where __file__ is not
+# guaranteed to exist. Resolve resources through the imported Python package.
+_MODULE_DIR = os.path.dirname(os.path.abspath(SolidFreeCADPackage.__file__))
 _ICON_PATH = os.path.join(_MODULE_DIR, "Resources", "icons", "SolidFreeCAD.svg")
 
 
