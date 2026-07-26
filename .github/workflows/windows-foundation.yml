@@ -55,10 +55,11 @@ jobs:
       - name: Validate PowerShell syntax
         shell: pwsh
         run: |
+          $tokens = $null
           $errors = $null
           [void][System.Management.Automation.Language.Parser]::ParseFile(
             (Resolve-Path "scripts/windows/Bootstrap-FreeCAD.ps1"),
-            [ref]$null,
+            [ref]$tokens,
             [ref]$errors
           )
 
