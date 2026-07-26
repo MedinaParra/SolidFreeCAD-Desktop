@@ -1,0 +1,10 @@
+.work/
+build/
+build-*/
+dist/
+out/
+*.user
+*.suo
+*.VC.db
+.vs/
+CMakeUserPresets.json
