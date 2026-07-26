@@ -46,6 +46,7 @@ jobs:
         uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
         with:
           pixi-version: v0.68.1
+          run-install: false
           cache: false
 
       - name: Validate Windows PowerShell scripts
