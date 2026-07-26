@@ -5,6 +5,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
+from PySide import QtWidgets
 
 from SolidFreeCAD.ClassicIcons import ensure_icon_pack
 from SolidFreeCAD.ShaftFeature import create_shaft
@@ -27,6 +28,17 @@ def _icon(*parts: str) -> str:
 
 def _native_available(command_name: str) -> bool:
     return command_name in set(Gui.listCommands())
+
+
+def _refresh_classic_command_buttons():
+    """Refresh buttons that were initially disabled before a document existed."""
+    manager = Gui.getMainWindow().findChild(
+        QtWidgets.QDockWidget, "SolidFreeCADClassicCommandManager"
+    )
+    if manager is None:
+        return
+    for button in manager.findChildren(QtWidgets.QToolButton):
+        button.setEnabled(True)
 
 
 class NativeCommand:
@@ -84,9 +96,12 @@ class CreatePartCommand:
         Gui.activeDocument().activeView().viewAxonometric()
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(body)
+        _refresh_classic_command_buttons()
         try:
             from SolidFreeCAD.ClassicWorkspace import show_property_manager
-            show_property_manager().set_mode("part")
+            manager = show_property_manager()
+            manager.set_mode("part")
+            manager.refresh_selection()
         except Exception:
             pass
 
@@ -110,10 +125,13 @@ class CreateShaftCommand:
         Gui.activeDocument().activeView().fitAll()
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(obj)
+        _refresh_classic_command_buttons()
         show_panel()
         try:
             from SolidFreeCAD.ClassicWorkspace import show_property_manager
-            show_property_manager().set_mode("shaft")
+            manager = show_property_manager()
+            manager.set_mode("shaft")
+            manager.refresh_selection()
         except Exception:
             pass
 
