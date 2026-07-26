@@ -12,6 +12,9 @@ param(
     [Parameter(Mandatory)]
     [string]$FreeCADCommit,
 
+    [Parameter(Mandatory)]
+    [string]$SolidFreeCADCommit,
+
     [string]$ExampleFile
 )
 
@@ -134,6 +137,7 @@ $metadata = [ordered]@{
     architecture = "x86_64"
     freecadTag = $FreeCADTag
     freecadCommit = $FreeCADCommit
+    solidFreeCADCommit = $SolidFreeCADCommit
     createdUtc = [DateTime]::UtcNow.ToString("o")
     brandedExecutable = $false
     workbenchOverlay = $true
