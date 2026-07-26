@@ -17,11 +17,21 @@ function Assert-Command {
     }
 }
 
+function Resolve-AbsolutePath {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if ([System.IO.Path]::IsPathFullyQualified($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+
+    return [System.IO.Path]::GetFullPath(
+        (Join-Path -Path (Get-Location) -ChildPath $Path)
+    )
+}
+
 Assert-Command -Name "git"
 
-$resolvedDestination = [System.IO.Path]::GetFullPath(
-    (Join-Path -Path (Get-Location) -ChildPath $Destination)
-)
+$resolvedDestination = Resolve-AbsolutePath -Path $Destination
 
 if (Test-Path -LiteralPath $resolvedDestination) {
     if (-not $Force) {
@@ -33,6 +43,10 @@ if (Test-Path -LiteralPath $resolvedDestination) {
 }
 
 $parent = Split-Path -Parent $resolvedDestination
+if ([string]::IsNullOrWhiteSpace($parent)) {
+    throw "Unable to resolve the parent directory for: $resolvedDestination"
+}
+
 New-Item -ItemType Directory -Path $parent -Force | Out-Null
 
 Write-Host "Cloning FreeCAD tag '$Tag' into '$resolvedDestination'..."
