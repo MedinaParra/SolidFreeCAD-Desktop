@@ -32,7 +32,7 @@ env:
   BASELINE_RUN_ID: "30191309655"
   BASELINE_ARTIFACT: "SolidFreeCAD-0.1.0-alpha.1-Windows-x64-Portable-Baseline"
   FREECAD_TAG: "1.1.1"
-  FREECAD_COMMIT: "948ca929cefade9a4f2111819315ba29e27774fa"
+  FREECAD_COMMIT: "0108fd4b4850cc46e625b60e53cea7a7bbe69f8d"
   SOLIDFREECAD_VERSION: "0.1.0-alpha.2"
 
 jobs:
@@ -158,6 +158,7 @@ jobs:
             -ProductVersion $env:SOLIDFREECAD_VERSION `
             -FreeCADTag $env:FREECAD_TAG `
             -FreeCADCommit $env:FREECAD_COMMIT `
+            -SolidFreeCADCommit $env:GITHUB_SHA `
             -ExampleFile $env:SOLIDFREECAD_EXAMPLE
 
       - name: Upload Windows workbench preview
@@ -179,8 +180,9 @@ jobs:
           ## SolidFreeCAD Windows workbench preview
 
           - SolidFreeCAD version: ``$env:SOLIDFREECAD_VERSION``
+          - SolidFreeCAD commit: ``$env:GITHUB_SHA``
           - Engine baseline run: ``$env:BASELINE_RUN_ID``
-          - FreeCAD engine: ``$env:FREECAD_TAG``
+          - FreeCAD engine: ``$env:FREECAD_TAG`` at ``$env:FREECAD_COMMIT``
           - Workbench overlay: shared and platform-neutral
           - Main functional test: parametric stepped shaft with editable keyway
           - Ubuntu track: preserved and unchanged
