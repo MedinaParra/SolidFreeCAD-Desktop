@@ -120,7 +120,7 @@ def create_shaft(document=None, name="SolidFreeCADShaft"):
     """Create and recompute a default editable shaft feature."""
 
     doc = document or App.ActiveDocument or App.newDocument("SolidFreeCADPart")
-    obj = doc.addObject("PartDesign::FeaturePython", name)
+    obj = doc.addObject("Part::FeaturePython", name)
     obj.Label = "Eje paramétrico"
     ShaftProxy(obj)
     doc.recompute()
