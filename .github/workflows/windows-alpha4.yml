@@ -1,0 +1,283 @@
+name: Windows alpha4 icons and Qt runtime fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "agent/windows-alpha4-icons-qt-fix"
+      - "product/**"
+    paths:
+      - ".github/workflows/windows-alpha4.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "scripts/alpha4-windows/**"
+      - "scripts/icons/**"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-alpha4.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "scripts/alpha4-windows/**"
+      - "scripts/icons/**"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: windows-alpha4-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ALPHA3_RUN_ID: "30207216611"
+  ALPHA3_ARTIFACT: "SolidFreeCAD-0.1.0-alpha.3-Windows-x64-Portable"
+  FREECAD_TAG: "1.1.1"
+  FREECAD_COMMIT: "0108fd4b4850cc46e625b60e53cea7a7bbe69f8d"
+  SOLIDFREECAD_VERSION: "0.1.0-alpha.4"
+
+jobs:
+  package-alpha4:
+    name: Validate icons, repair Qt and package alpha4
+    runs-on: windows-2022
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Download validated alpha3 portable
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+        with:
+          name: ${{ env.ALPHA3_ARTIFACT }}
+          path: alpha3-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.ALPHA3_RUN_ID }}
+
+      - name: Generate SolidFreeCAD SVG icon system
+        shell: pwsh
+        run: |
+          python scripts/icons/Generate-IconPack.py `
+            --output-root "build/SolidFreeCAD_IconPack_v1" `
+            --zip-path "build/SolidFreeCAD_IconPack_v1.zip"
+          if ($LASTEXITCODE -ne 0) { throw "Icon generator failed." }
+
+      - name: Validate sources and SVG icon system
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "scripts/alpha4-windows/Package-Alpha4.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Error
+            throw "PowerShell syntax validation failed."
+          }
+
+          $pythonFiles = Get-ChildItem -Path "overlay", "tests", "scripts/icons" -Filter "*.py" -Recurse
+          foreach ($pythonFile in $pythonFiles) {
+            python -m py_compile $pythonFile.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Python syntax validation failed: $($pythonFile.FullName)" }
+          }
+
+          $env:SFC_ICON_VALIDATION = (Resolve-Path "build/SolidFreeCAD_IconPack_v1")
+          @'
+          from pathlib import Path
+          import os
+          import xml.etree.ElementTree as ET
+
+          root = Path(os.environ["SFC_ICON_VALIDATION"])
+          icons = sorted(root.rglob("*.svg"))
+          if len(icons) < 12:
+              raise SystemExit(f"Expected at least 12 operation icons, found {len(icons)}")
+          for path in icons:
+              node = ET.parse(path).getroot()
+              if node.attrib.get("viewBox") != "0 0 24 24":
+                  raise SystemExit(f"Invalid viewBox: {path}")
+              if any(str(child.tag).endswith("image") for child in node.iter()):
+                  raise SystemExit(f"Raster image embedded in SVG: {path}")
+          print(f"Validated {len(icons)} original SVG operation icons")
+          '@ | python -
+
+      - name: Ensure Inno Setup compiler
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          )
+          $compiler = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "Unable to install Inno Setup." }
+          }
+
+      - name: Expand alpha3 portable runtime
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -LiteralPath "alpha3-artifact" -Filter "*.7z" -File | Select-Object -First 1
+          if (-not $archive) { throw "The alpha3 artifact does not contain a .7z runtime." }
+          $runtimeRoot = Join-Path $env:RUNNER_TEMP "SolidFreeCAD-alpha3-runtime"
+          New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
+          & 7z x $archive.FullName "-o$runtimeRoot" -y
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract the alpha3 runtime." }
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeRoot "Library/bin/FreeCAD.exe"))) {
+            throw "Extracted runtime is missing FreeCAD.exe."
+          }
+          "SOLIDFREECAD_RUNTIME=$runtimeRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install alpha4 overlay and generated icons
+        shell: pwsh
+        run: |
+          $source = Resolve-Path "overlay/Mod/SolidFreeCAD"
+          $destination = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/Mod/SolidFreeCAD"
+          if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Recurse -Force }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Copy-Item -Path (Join-Path $source "*") -Destination $destination -Recurse -Force
+          $generatedIcons = Resolve-Path "build/SolidFreeCAD_IconPack_v1/icons"
+          $iconDestination = Join-Path $destination "Resources/icons"
+          New-Item -ItemType Directory -Path $iconDestination -Force | Out-Null
+          Copy-Item -Path (Join-Path $generatedIcons "*") -Destination $iconDestination -Recurse -Force
+          $iconCount = (Get-ChildItem -LiteralPath $iconDestination -Filter "*.svg" -File -Recurse).Count
+          if ($iconCount -lt 12) { throw "Overlay icon installation incomplete: $iconCount SVG files." }
+
+      - name: Run parametric shaft regression test
+        shell: pwsh
+        run: |
+          $command = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/bin/FreeCADCmd.exe"
+          $example = Join-Path $env:RUNNER_TEMP "Eje-Parametrico-Demo.FCStd"
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Library/bin');$env:SOLIDFREECAD_RUNTIME;$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Scripts');$previousPath"
+            $env:PYTHONHOME = $env:SOLIDFREECAD_RUNTIME
+            $env:SOLIDFREECAD_SMOKE_FCSTD = $example
+            & $command "tests/solidfreecad_shaft_smoke.py"
+            if ($LASTEXITCODE -ne 0) { throw "Shaft regression failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+          "SOLIDFREECAD_EXAMPLE=$example" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build alpha4 portable, installer and icon ZIP
+        shell: pwsh
+        run: |
+          ./scripts/alpha4-windows/Package-Alpha4.ps1 `
+            -RuntimeRoot $env:SOLIDFREECAD_RUNTIME `
+            -IconPackRoot "build/SolidFreeCAD_IconPack_v1" `
+            -OutputDirectory "dist" `
+            -ProductVersion $env:SOLIDFREECAD_VERSION `
+            -FreeCADTag $env:FREECAD_TAG `
+            -FreeCADCommit $env:FREECAD_COMMIT `
+            -SolidFreeCADCommit $env:GITHUB_SHA `
+            -ExampleFile $env:SOLIDFREECAD_EXAMPLE
+
+      - name: Validate Qt platform plugin layout
+        shell: pwsh
+        run: |
+          $staging = Join-Path (Resolve-Path "dist") "SolidFreeCAD-$env:SOLIDFREECAD_VERSION-FreeCAD-$env:FREECAD_TAG-Windows-x64-Portable"
+          $required = @(
+            (Join-Path $staging "Library/bin/FreeCAD.exe"),
+            (Join-Path $staging "Library/bin/qt.conf"),
+            (Join-Path $staging "Library/plugins/platforms/qwindows.dll"),
+            (Join-Path $staging "SolidFreeCADLauncher.exe"),
+            (Join-Path $staging "Start-SolidFreeCAD-Diagnostic.cmd"),
+            (Join-Path $staging "UserData/user.cfg")
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path -LiteralPath $path)) { throw "Alpha4 Qt runtime is missing: $path" }
+          }
+          $qtConf = Get-Content -LiteralPath (Join-Path $staging "Library/bin/qt.conf") -Raw
+          if ($qtConf -notmatch "Plugins=plugins") { throw "qt.conf does not point to the packaged plugin directory." }
+          "ALPHA4_STAGING=$staging" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Launch graphical Qt smoke test
+        shell: pwsh
+        run: |
+          $staging = $env:ALPHA4_STAGING
+          $freecad = Join-Path $staging "Library/bin/FreeCAD.exe"
+          $userConfig = Join-Path $staging "UserData/user.cfg"
+          $systemConfig = Join-Path $staging "UserData/system.cfg"
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $staging 'Library/bin');$(Join-Path $staging 'Library/usr/bin');$staging;$(Join-Path $staging 'Scripts');$env:PATH"
+            $env:PYTHONHOME = $staging
+            $env:FREECAD_USER_HOME = Join-Path $staging "UserData"
+            $env:FREECAD_USER_DATA = Join-Path $staging "UserData"
+            $env:QT_PLUGIN_PATH = Join-Path $staging "Library/plugins"
+            $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $staging "Library/plugins/platforms"
+            $env:QT_QPA_PLATFORM = "windows"
+            $env:QT_OPENGL = "software"
+            $arguments = @("--user-cfg", $userConfig, "--system-cfg", $systemConfig)
+            $process = Start-Process -FilePath $freecad -ArgumentList $arguments -PassThru
+            Start-Sleep -Seconds 15
+            if ($process.HasExited) {
+              throw "FreeCAD GUI exited during Qt smoke test with code $($process.ExitCode)."
+            }
+            Stop-Process -Id $process.Id -Force
+          }
+          finally {
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+
+      - name: Upload alpha4 packaging diagnostic
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha4-packaging-diagnostic
+          path: dist/alpha4-packaging-error.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload alpha4 icon package
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-IconPack-v1
+          path: dist/SolidFreeCAD-IconPack-v1.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload alpha4 portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Portable
+          path: |
+            dist/*-Portable.7z
+            dist/*-Portable.7z.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload alpha4 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Setup
+          path: |
+            dist/*-Setup.exe
+            dist/*-Setup.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish alpha4 summary
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## SolidFreeCAD Windows alpha.4
+
+          - Qt fix: canonical ``Library/plugins/platforms/qwindows.dll``
+          - Qt configuration: ``Library/bin/qt.conf``
+          - Launcher variables: ``QT_PLUGIN_PATH`` and ``QT_QPA_PLATFORM_PLUGIN_PATH``
+          - Graphical Qt smoke test: required
+          - Icon system: original SVG SFC Mechanical Icon System v1
+          - Deliverables: icon ZIP, portable and Setup.exe
+          - Ubuntu track: preserved and unchanged
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
