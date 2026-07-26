@@ -122,25 +122,32 @@ jobs:
             }
           }
 
-      - name: Run parametric shaft regression
+      - name: Run native shaft and piece regressions
         shell: pwsh
         run: |
           $command = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/bin/FreeCADCmd.exe"
-          $example = Join-Path $env:RUNNER_TEMP "Eje-Parametrico-Alpha5.FCStd"
+          $shaftExample = Join-Path $env:RUNNER_TEMP "Eje-Parametrico-Alpha5.FCStd"
+          $partExample = Join-Path $env:RUNNER_TEMP "Pieza-Classic-Alpha5.FCStd"
           $previousPath = $env:PATH
           $previousPythonHome = $env:PYTHONHOME
           try {
             $env:PATH = "$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Library/bin');$env:SOLIDFREECAD_RUNTIME;$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Scripts');$previousPath"
             $env:PYTHONHOME = $env:SOLIDFREECAD_RUNTIME
-            $env:SOLIDFREECAD_SMOKE_FCSTD = $example
+
+            $env:SOLIDFREECAD_SMOKE_FCSTD = $shaftExample
             & $command "tests/solidfreecad_shaft_smoke.py"
             if ($LASTEXITCODE -ne 0) { throw "Shaft regression failed with exit code $LASTEXITCODE." }
+
+            $env:SOLIDFREECAD_CLASSIC_SMOKE_FCSTD = $partExample
+            & $command "tests/solidfreecad_classic_part_smoke.py"
+            if ($LASTEXITCODE -ne 0) { throw "Classic piece regression failed with exit code $LASTEXITCODE." }
           }
           finally {
             $env:PATH = $previousPath
             $env:PYTHONHOME = $previousPythonHome
           }
-          "SOLIDFREECAD_EXAMPLE=$example" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_EXAMPLE=$shaftExample" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_PART_EXAMPLE=$partExample" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Run graphical classic workflow smoke test
         shell: pwsh
@@ -149,7 +156,6 @@ jobs:
           $runtime = $env:SOLIDFREECAD_RUNTIME
           $freecad = Join-Path $runtime "Library/bin/FreeCAD.exe"
           $marker = Join-Path $env:RUNNER_TEMP "classic-gui-smoke.txt"
-          $fcstd = Join-Path $env:RUNNER_TEMP "Classic-Workflow-Smoke.FCStd"
           $stdout = Join-Path (Resolve-Path "dist") "classic-gui-stdout.txt"
           $stderr = Join-Path (Resolve-Path "dist") "classic-gui-stderr.txt"
           $userConfig = Join-Path $runtime "UserData/user.cfg"
@@ -167,9 +173,7 @@ jobs:
             $env:QT_QPA_PLATFORM = "windows"
             $env:QT_OPENGL = "software"
             $env:SOLIDFREECAD_GUI_SMOKE_MARKER = $marker
-            $env:SOLIDFREECAD_CLASSIC_SMOKE_FCSTD = $fcstd
 
-            # A .py file passed directly to FreeCAD.exe runs inside the GUI event loop.
             $arguments = @(
               "--user-cfg", $userConfig,
               "--system-cfg", $systemConfig,
@@ -191,7 +195,6 @@ jobs:
             $result = Get-Content -LiteralPath $marker -Raw
             Write-Host $result
             if ($result -notmatch "^PASS") { throw "Classic GUI smoke test failed." }
-            if (-not (Test-Path -LiteralPath $fcstd)) { throw "Classic workflow FCStd was not created." }
           }
           finally {
             if (Test-Path -LiteralPath $marker) {
@@ -218,6 +221,7 @@ jobs:
           $newIconZip = Join-Path (Resolve-Path "dist") "SolidFreeCAD-IconPack-Classic-v3.zip"
           if (-not (Test-Path -LiteralPath $oldIconZip)) { throw "Classic icon ZIP was not packaged." }
           Move-Item -LiteralPath $oldIconZip -Destination $newIconZip -Force
+          Copy-Item -LiteralPath $env:SOLIDFREECAD_PART_EXAMPLE -Destination (Join-Path (Resolve-Path "dist") "Pieza-Classic-Alpha5.FCStd") -Force
 
       - name: Validate packaged Windows runtime
         shell: pwsh
@@ -253,6 +257,7 @@ jobs:
           path: |
             dist/*-Portable.7z
             dist/*-Portable.7z.sha256
+            dist/Pieza-Classic-Alpha5.FCStd
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -293,6 +298,7 @@ jobs:
           - Left manager: model tree plus contextual PropertyManager
           - Icons: 75 original thin-stroke SVG files
           - Workflow: part -> plane/face -> sketch -> constraints -> feature
+          - Native regression: shaft plus Body, solid BRep, FCStd save and reopen
           - Engine and format: native FreeCAD 1.1.1 / FCStd
           - Windows Qt runtime repair: preserved from alpha.4
           - Ubuntu track: unchanged
