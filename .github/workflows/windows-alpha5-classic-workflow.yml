@@ -1,0 +1,305 @@
+name: Windows alpha5 classic workflow
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "agent/windows-solidfreecad-classic-workflow-v1"
+    paths:
+      - ".github/workflows/windows-alpha5-classic-workflow.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "scripts/alpha4-windows/**"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-alpha5-classic-workflow.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "scripts/alpha4-windows/**"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: windows-alpha5-classic-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ALPHA4_RUN_ID: "30211410332"
+  ALPHA4_ARTIFACT: "SolidFreeCAD-0.1.0-alpha.4-Windows-x64-Portable"
+  FREECAD_TAG: "1.1.1"
+  FREECAD_COMMIT: "0108fd4b4850cc46e625b60e53cea7a7bbe69f8d"
+  SOLIDFREECAD_VERSION: "0.1.0-alpha.5"
+
+jobs:
+  package-alpha5:
+    name: Validate classic CAD workflow and package alpha5
+    runs-on: windows-2022
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Download validated alpha4 portable
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+        with:
+          name: ${{ env.ALPHA4_ARTIFACT }}
+          path: alpha4-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.ALPHA4_RUN_ID }}
+
+      - name: Validate Python sources and classic SVG pack
+        shell: pwsh
+        run: |
+          $pythonFiles = Get-ChildItem -Path "overlay", "tests" -Filter "*.py" -Recurse
+          foreach ($pythonFile in $pythonFiles) {
+            python -m py_compile $pythonFile.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Python syntax validation failed: $($pythonFile.FullName)"
+            }
+          }
+          python tests/solidfreecad_classic_icon_smoke.py
+          if ($LASTEXITCODE -ne 0) { throw "Classic SVG validation failed." }
+
+          $classicRoot = Resolve-Path "overlay/Mod/SolidFreeCAD/Resources/icons/classic"
+          $packRoot = Join-Path (Resolve-Path ".") "build/SolidFreeCAD_IconPack_Classic_v3"
+          $packIcons = Join-Path $packRoot "icons"
+          New-Item -ItemType Directory -Path $packIcons -Force | Out-Null
+          Copy-Item -Path (Join-Path $classicRoot "*") -Destination $packIcons -Recurse -Force
+          @"
+          # SolidFreeCAD Classic Icon Pack v3
+
+          75 original SVG icons, 24 x 24 viewBox, thin 0.72 stroke.
+          "@ | Set-Content -LiteralPath (Join-Path $packRoot "README.md") -Encoding utf8
+          "SFC_CLASSIC_ICON_PACK=$packRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Ensure Inno Setup compiler
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          )
+          $compiler = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "Unable to install Inno Setup." }
+          }
+
+      - name: Expand alpha4 portable runtime
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -LiteralPath "alpha4-artifact" -Filter "*.7z" -File | Select-Object -First 1
+          if (-not $archive) { throw "The alpha4 artifact does not contain a .7z runtime." }
+          $runtimeRoot = Join-Path $env:RUNNER_TEMP "SolidFreeCAD-alpha5-runtime"
+          New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
+          & 7z x $archive.FullName "-o$runtimeRoot" -y
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract alpha4 runtime." }
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeRoot "Library/bin/FreeCAD.exe"))) {
+            throw "Extracted alpha4 runtime is missing FreeCAD.exe."
+          }
+          "SOLIDFREECAD_RUNTIME=$runtimeRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install alpha5 classic overlay
+        shell: pwsh
+        run: |
+          $source = Resolve-Path "overlay/Mod/SolidFreeCAD"
+          $destination = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/Mod/SolidFreeCAD"
+          if (Test-Path -LiteralPath $destination) {
+            Remove-Item -LiteralPath $destination -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Copy-Item -Path (Join-Path $source "*") -Destination $destination -Recurse -Force
+          $classicIcons = Join-Path $destination "Resources/icons/classic"
+          $iconCount = (Get-ChildItem -LiteralPath $classicIcons -Filter "*.svg" -File -Recurse).Count
+          if ($iconCount -ne 75) { throw "Expected 75 classic SVG icons in runtime, found $iconCount." }
+          foreach ($required in @("ClassicIcons.py", "ClassicWorkspace.py", "Commands.py", "InitGui.py")) {
+            if (-not (Test-Path -LiteralPath (Join-Path $destination $required))) {
+              throw "Classic workflow overlay is missing $required."
+            }
+          }
+
+      - name: Run native shaft and piece regressions
+        shell: pwsh
+        run: |
+          $command = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/bin/FreeCADCmd.exe"
+          $shaftExample = Join-Path $env:RUNNER_TEMP "Eje-Parametrico-Alpha5.FCStd"
+          $partExample = Join-Path $env:RUNNER_TEMP "Pieza-Classic-Alpha5.FCStd"
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Library/bin');$env:SOLIDFREECAD_RUNTIME;$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Scripts');$previousPath"
+            $env:PYTHONHOME = $env:SOLIDFREECAD_RUNTIME
+
+            $env:SOLIDFREECAD_SMOKE_FCSTD = $shaftExample
+            & $command "tests/solidfreecad_shaft_smoke.py"
+            if ($LASTEXITCODE -ne 0) { throw "Shaft regression failed with exit code $LASTEXITCODE." }
+
+            $env:SOLIDFREECAD_CLASSIC_SMOKE_FCSTD = $partExample
+            & $command "tests/solidfreecad_classic_part_smoke.py"
+            if ($LASTEXITCODE -ne 0) { throw "Classic piece regression failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+          "SOLIDFREECAD_EXAMPLE=$shaftExample" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_PART_EXAMPLE=$partExample" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run graphical classic workflow smoke test
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          $runtime = $env:SOLIDFREECAD_RUNTIME
+          $freecad = Join-Path $runtime "Library/bin/FreeCAD.exe"
+          $marker = Join-Path $env:RUNNER_TEMP "classic-gui-smoke.txt"
+          $stdout = Join-Path (Resolve-Path "dist") "classic-gui-stdout.txt"
+          $stderr = Join-Path (Resolve-Path "dist") "classic-gui-stderr.txt"
+          $userConfig = Join-Path $runtime "UserData/user.cfg"
+          $systemConfig = Join-Path $runtime "UserData/system.cfg"
+          $scriptPath = (Resolve-Path "tests/solidfreecad_classic_gui_smoke.py").Path
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $runtime 'Library/bin');$(Join-Path $runtime 'Library/usr/bin');$runtime;$(Join-Path $runtime 'Scripts');$previousPath"
+            $env:PYTHONHOME = $runtime
+            $env:FREECAD_USER_HOME = Join-Path $runtime "UserData"
+            $env:FREECAD_USER_DATA = Join-Path $runtime "UserData"
+            $env:QT_PLUGIN_PATH = Join-Path $runtime "Library/plugins"
+            $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $runtime "Library/plugins/platforms"
+            $env:QT_QPA_PLATFORM = "windows"
+            $env:QT_OPENGL = "software"
+            $env:SOLIDFREECAD_GUI_SMOKE_MARKER = $marker
+
+            $arguments = @(
+              "--user-cfg", $userConfig,
+              "--system-cfg", $systemConfig,
+              $scriptPath
+            )
+            $process = Start-Process -FilePath $freecad -ArgumentList $arguments -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            $deadline = (Get-Date).AddSeconds(90)
+            while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Seconds 2
+              $process.Refresh()
+            }
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              throw "Classic GUI smoke test timed out."
+            }
+            if (-not (Test-Path -LiteralPath $marker)) {
+              throw "Classic GUI smoke test did not write its marker. FreeCAD exit code: $($process.ExitCode)."
+            }
+            $result = Get-Content -LiteralPath $marker -Raw
+            Write-Host $result
+            if ($result -notmatch "^PASS") { throw "Classic GUI smoke test failed." }
+          }
+          finally {
+            if (Test-Path -LiteralPath $marker) {
+              Copy-Item -LiteralPath $marker -Destination "dist/classic-gui-smoke.txt" -Force
+            }
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+
+      - name: Build alpha5 portable and installer
+        shell: pwsh
+        run: |
+          ./scripts/alpha4-windows/Package-Alpha4.ps1 `
+            -RuntimeRoot $env:SOLIDFREECAD_RUNTIME `
+            -IconPackRoot $env:SFC_CLASSIC_ICON_PACK `
+            -OutputDirectory "dist" `
+            -ProductVersion $env:SOLIDFREECAD_VERSION `
+            -FreeCADTag $env:FREECAD_TAG `
+            -FreeCADCommit $env:FREECAD_COMMIT `
+            -SolidFreeCADCommit $env:GITHUB_SHA `
+            -ExampleFile $env:SOLIDFREECAD_EXAMPLE
+
+          $oldIconZip = Join-Path (Resolve-Path "dist") "SolidFreeCAD-IconPack-v1.zip"
+          $newIconZip = Join-Path (Resolve-Path "dist") "SolidFreeCAD-IconPack-Classic-v3.zip"
+          if (-not (Test-Path -LiteralPath $oldIconZip)) { throw "Classic icon ZIP was not packaged." }
+          Move-Item -LiteralPath $oldIconZip -Destination $newIconZip -Force
+          Copy-Item -LiteralPath $env:SOLIDFREECAD_PART_EXAMPLE -Destination (Join-Path (Resolve-Path "dist") "Pieza-Classic-Alpha5.FCStd") -Force
+
+      - name: Validate packaged Windows runtime
+        shell: pwsh
+        run: |
+          $staging = Join-Path (Resolve-Path "dist") "SolidFreeCAD-$env:SOLIDFREECAD_VERSION-FreeCAD-$env:FREECAD_TAG-Windows-x64-Portable"
+          $required = @(
+            (Join-Path $staging "Library/bin/FreeCAD.exe"),
+            (Join-Path $staging "Library/bin/qt.conf"),
+            (Join-Path $staging "Library/plugins/platforms/qwindows.dll"),
+            (Join-Path $staging "Library/Mod/SolidFreeCAD/ClassicWorkspace.py"),
+            (Join-Path $staging "Library/Mod/SolidFreeCAD/Resources/icons/classic/operaciones/saliente_base.svg"),
+            (Join-Path $staging "SolidFreeCADLauncher.exe"),
+            (Join-Path $staging "UserData/user.cfg")
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path -LiteralPath $path)) { throw "Packaged alpha5 runtime is missing: $path" }
+          }
+          $iconCount = (Get-ChildItem -LiteralPath (Join-Path $staging "Library/Mod/SolidFreeCAD/Resources/icons/classic") -Filter "*.svg" -File -Recurse).Count
+          if ($iconCount -ne 75) { throw "Packaged runtime contains $iconCount classic icons instead of 75." }
+
+      - name: Upload alpha5 icon pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-IconPack-Classic-v3
+          path: dist/SolidFreeCAD-IconPack-Classic-v3.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload alpha5 portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Portable
+          path: |
+            dist/*-Portable.7z
+            dist/*-Portable.7z.sha256
+            dist/Pieza-Classic-Alpha5.FCStd
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload alpha5 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Setup
+          path: |
+            dist/*-Setup.exe
+            dist/*-Setup.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha5-diagnostics
+          path: |
+            dist/alpha4-packaging-error.txt
+            dist/classic-gui-smoke.txt
+            dist/classic-gui-stdout.txt
+            dist/classic-gui-stderr.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publish alpha5 summary
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## SolidFreeCAD Windows alpha.5
+
+          - Interface: classic tabbed CommandManager
+          - Tabs: Operations, Sketch, Surfaces, Evaluate and Shaft
+          - Left manager: model tree plus contextual PropertyManager
+          - Icons: 75 original thin-stroke SVG files
+          - Workflow: part -> plane/face -> sketch -> constraints -> feature
+          - Native regression: shaft plus Body, solid BRep, FCStd save and reopen
+          - Engine and format: native FreeCAD 1.1.1 / FCStd
+          - Windows Qt runtime repair: preserved from alpha.4
+          - Ubuntu track: unchanged
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
