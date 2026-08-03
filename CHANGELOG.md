@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.12-runtime-preflight-source
+
+- Added a local Preflight page inside the Verification panel.
+- Added interface widget and window-scale evidence checks.
+- Added essential runtime command coverage checks.
+- Added local interface screenshot capture.
+- Added isolated native BRep creation and validation.
+- Added FCStd save, close, reopen and volume comparison.
+- Added STEP export, import and shape validation.
+- Added structured local JSON report and temporary evidence folder.
+- Added alpha.12 fallback to alpha.11.
+- Did not compile, package, upload or publish any Windows executable.
+
 ## 0.1.0-alpha.11-workspace-rc
 
 - Added original quick-access toolbar for essential document and view actions.
