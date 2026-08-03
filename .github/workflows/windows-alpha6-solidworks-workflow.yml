@@ -1,0 +1,313 @@
+name: Windows alpha6 mechanical workflow
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "agent/windows-alpha6-solidworks-workflow"
+    paths:
+      - ".github/workflows/windows-alpha6-solidworks-workflow.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "docs/**"
+      - "README.md"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-alpha6-solidworks-workflow.yml"
+      - "overlay/**"
+      - "tests/**"
+      - "docs/**"
+      - "README.md"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: windows-alpha6-mechanical-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ALPHA5_RUN_ID: "30220398037"
+  ALPHA5_ARTIFACT: "SolidFreeCAD-0.1.0-alpha.5-Windows-x64-Portable"
+  FREECAD_TAG: "1.1.1"
+  FREECAD_COMMIT: "0108fd4b4850cc46e625b60e53cea7a7bbe69f8d"
+  SOLIDFREECAD_VERSION: "0.1.0-alpha.6"
+
+jobs:
+  validate-and-package:
+    name: Validate integrated mechanical workflow and package alpha6
+    runs-on: windows-2022
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Download validated alpha5 portable
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+        with:
+          name: ${{ env.ALPHA5_ARTIFACT }}
+          path: alpha5-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.ALPHA5_RUN_ID }}
+
+      - name: Validate source, JSON contracts and original SVG resources
+        shell: pwsh
+        run: |
+          $pythonFiles = Get-ChildItem -Path "overlay", "tests" -Filter "*.py" -Recurse
+          foreach ($pythonFile in $pythonFiles) {
+            python -m py_compile $pythonFile.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Python syntax validation failed: $($pythonFile.FullName)" }
+          }
+          python tests/solidfreecad_classic_icon_smoke.py
+          if ($LASTEXITCODE -ne 0) { throw "Classic SVG validation failed." }
+          Get-Content docs/solidfreecad-project.schema.json -Raw | ConvertFrom-Json | Out-Null
+          Get-Content docs/solidfreecad-project.example.json -Raw | ConvertFrom-Json | Out-Null
+
+          $classicRoot = Resolve-Path "overlay/Mod/SolidFreeCAD/Resources/icons/classic"
+          $packRoot = Join-Path (Resolve-Path ".") "build/SolidFreeCAD_IconPack_Classic_v3"
+          $packIcons = Join-Path $packRoot "icons"
+          New-Item -ItemType Directory -Path $packIcons -Force | Out-Null
+          Copy-Item -Path (Join-Path $classicRoot "*") -Destination $packIcons -Recurse -Force
+          @"
+          # SolidFreeCAD Classic Icon Pack v3
+
+          Original SolidFreeCAD vector resources. No proprietary CAD artwork is included.
+          "@ | Set-Content -LiteralPath (Join-Path $packRoot "README.md") -Encoding utf8
+          "SFC_CLASSIC_ICON_PACK=$packRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Ensure Inno Setup compiler
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          )
+          $compiler = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $compiler) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "Unable to install Inno Setup." }
+          }
+
+      - name: Expand alpha5 portable runtime
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -LiteralPath "alpha5-artifact" -Filter "*.7z" -File | Select-Object -First 1
+          if (-not $archive) { throw "The alpha5 artifact does not contain a .7z runtime." }
+          $runtimeRoot = Join-Path $env:RUNNER_TEMP "SolidFreeCAD-alpha6-runtime"
+          New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
+          & 7z x $archive.FullName "-o$runtimeRoot" -y
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract alpha5 runtime." }
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeRoot "Library/bin/FreeCAD.exe"))) {
+            throw "Extracted alpha5 runtime is missing FreeCAD.exe."
+          }
+          "SOLIDFREECAD_RUNTIME=$runtimeRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install alpha6 overlay
+        shell: pwsh
+        run: |
+          $source = Resolve-Path "overlay/Mod/SolidFreeCAD"
+          $destination = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/Mod/SolidFreeCAD"
+          if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Recurse -Force }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Copy-Item -Path (Join-Path $source "*") -Destination $destination -Recurse -Force
+          foreach ($required in @(
+            "MechanicalWorkspace.py", "DemoPartFeature.py", "ClassicWorkspace.py",
+            "ClassicIcons.py", "Commands.py", "InitGui.py"
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $destination $required))) {
+              throw "Alpha6 overlay is missing $required."
+            }
+          }
+
+      - name: Run headless parametric, save-reopen and STEP validation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          $command = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/bin/FreeCADCmd.exe"
+          $fcstd = Join-Path (Resolve-Path "dist") "Pieza-Prueba-Alpha6.FCStd"
+          $step = Join-Path (Resolve-Path "dist") "Pieza-Prueba-Alpha6.step"
+          $shaft = Join-Path (Resolve-Path "dist") "Eje-Parametrico-Alpha6.FCStd"
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Library/bin');$env:SOLIDFREECAD_RUNTIME;$(Join-Path $env:SOLIDFREECAD_RUNTIME 'Scripts');$previousPath"
+            $env:PYTHONHOME = $env:SOLIDFREECAD_RUNTIME
+            $env:SOLIDFREECAD_ALPHA6_FCSTD = $fcstd
+            $env:SOLIDFREECAD_ALPHA6_STEP = $step
+            & $command "tests/solidfreecad_alpha6_part_smoke.py"
+            if ($LASTEXITCODE -ne 0) { throw "Alpha6 parametric part validation failed." }
+            $env:SOLIDFREECAD_SMOKE_FCSTD = $shaft
+            & $command "tests/solidfreecad_shaft_smoke.py"
+            if ($LASTEXITCODE -ne 0) { throw "Shaft regression failed." }
+          }
+          finally {
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+          "SOLIDFREECAD_EXAMPLE=$fcstd" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_STEP_EXAMPLE=$step" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run graphical alpha6 workspace validation and capture screenshot
+        shell: pwsh
+        run: |
+          $runtime = $env:SOLIDFREECAD_RUNTIME
+          $freecad = Join-Path $runtime "Library/bin/FreeCAD.exe"
+          $marker = Join-Path $env:RUNNER_TEMP "alpha6-gui-smoke.txt"
+          $screenshot = Join-Path (Resolve-Path "dist") "SolidFreeCAD-alpha6-interface.png"
+          $stdout = Join-Path (Resolve-Path "dist") "alpha6-gui-stdout.txt"
+          $stderr = Join-Path (Resolve-Path "dist") "alpha6-gui-stderr.txt"
+          $userConfig = Join-Path $runtime "UserData/user.cfg"
+          $systemConfig = Join-Path $runtime "UserData/system.cfg"
+          $scriptPath = (Resolve-Path "tests/solidfreecad_alpha6_gui_smoke.py").Path
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $runtime 'Library/bin');$(Join-Path $runtime 'Library/usr/bin');$runtime;$(Join-Path $runtime 'Scripts');$previousPath"
+            $env:PYTHONHOME = $runtime
+            $env:FREECAD_USER_HOME = Join-Path $runtime "UserData"
+            $env:FREECAD_USER_DATA = Join-Path $runtime "UserData"
+            $env:QT_PLUGIN_PATH = Join-Path $runtime "Library/plugins"
+            $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $runtime "Library/plugins/platforms"
+            $env:QT_QPA_PLATFORM = "windows"
+            $env:QT_OPENGL = "software"
+            $env:SOLIDFREECAD_ALPHA6_GUI_MARKER = $marker
+            $env:SOLIDFREECAD_ALPHA6_SCREENSHOT = $screenshot
+
+            $arguments = @("--user-cfg", $userConfig, "--system-cfg", $systemConfig, $scriptPath)
+            $process = Start-Process -FilePath $freecad -ArgumentList $arguments -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            $deadline = (Get-Date).AddSeconds(100)
+            while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Seconds 2
+              $process.Refresh()
+            }
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              throw "Alpha6 GUI smoke test timed out."
+            }
+            if (-not (Test-Path -LiteralPath $marker)) {
+              throw "Alpha6 GUI test did not write its marker. Exit code: $($process.ExitCode)."
+            }
+            $result = Get-Content -LiteralPath $marker -Raw
+            Write-Host $result
+            if ($result -notmatch "^PASS") { throw "Alpha6 GUI smoke test failed." }
+            if (-not (Test-Path -LiteralPath $screenshot)) { throw "Alpha6 screenshot was not created." }
+          }
+          finally {
+            if (Test-Path -LiteralPath $marker) { Copy-Item $marker "dist/alpha6-gui-smoke.txt" -Force }
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+
+      - name: Build alpha6 portable and installer
+        shell: pwsh
+        run: |
+          ./scripts/alpha4-windows/Package-Alpha4.ps1 `
+            -RuntimeRoot $env:SOLIDFREECAD_RUNTIME `
+            -IconPackRoot $env:SFC_CLASSIC_ICON_PACK `
+            -OutputDirectory "dist" `
+            -ProductVersion $env:SOLIDFREECAD_VERSION `
+            -FreeCADTag $env:FREECAD_TAG `
+            -FreeCADCommit $env:FREECAD_COMMIT `
+            -SolidFreeCADCommit $env:GITHUB_SHA `
+            -ExampleFile $env:SOLIDFREECAD_EXAMPLE
+
+          $oldIconZip = Join-Path (Resolve-Path "dist") "SolidFreeCAD-IconPack-v1.zip"
+          $newIconZip = Join-Path (Resolve-Path "dist") "SolidFreeCAD-IconPack-Classic-v3.zip"
+          if (Test-Path -LiteralPath $oldIconZip) { Move-Item $oldIconZip $newIconZip -Force }
+          Copy-Item -LiteralPath $env:SOLIDFREECAD_STEP_EXAMPLE -Destination "dist/Pieza-Prueba-Alpha6.step" -Force
+
+      - name: Validate packaged alpha6 runtime
+        shell: pwsh
+        run: |
+          $staging = Join-Path (Resolve-Path "dist") "SolidFreeCAD-$env:SOLIDFREECAD_VERSION-FreeCAD-$env:FREECAD_TAG-Windows-x64-Portable"
+          $required = @(
+            (Join-Path $staging "Library/bin/FreeCAD.exe"),
+            (Join-Path $staging "Library/bin/qt.conf"),
+            (Join-Path $staging "Library/plugins/platforms/qwindows.dll"),
+            (Join-Path $staging "Library/Mod/SolidFreeCAD/MechanicalWorkspace.py"),
+            (Join-Path $staging "Library/Mod/SolidFreeCAD/DemoPartFeature.py"),
+            (Join-Path $staging "SolidFreeCADLauncher.exe"),
+            (Join-Path $staging "UserData/user.cfg")
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path -LiteralPath $path)) { throw "Packaged alpha6 runtime is missing: $path" }
+          }
+
+      - name: Upload alpha6 visual validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha6-Visual-Validation
+          path: |
+            dist/SolidFreeCAD-alpha6-interface.png
+            dist/alpha6-gui-smoke.txt
+            dist/alpha6-gui-stdout.txt
+            dist/alpha6-gui-stderr.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload alpha6 examples
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha6-Validated-Examples
+          path: |
+            dist/Pieza-Prueba-Alpha6.FCStd
+            dist/Pieza-Prueba-Alpha6.step
+            dist/Eje-Parametrico-Alpha6.FCStd
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload alpha6 portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Portable
+          path: |
+            dist/*-Portable.7z
+            dist/*-Portable.7z.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload alpha6 installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-${{ env.SOLIDFREECAD_VERSION }}-Windows-x64-Setup
+          path: |
+            dist/*-Setup.exe
+            dist/*-Setup.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha6-diagnostics
+          path: |
+            dist/alpha6-gui-smoke.txt
+            dist/alpha6-gui-stdout.txt
+            dist/alpha6-gui-stderr.txt
+            dist/alpha4-packaging-error.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publish alpha6 summary
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## SolidFreeCAD Windows alpha.6
+
+          - Integrated FeatureManager, PropertyManager and configurations panel
+          - Seven CommandManager tabs including sheet metal and assembly foundations
+          - Compact Heads-Up view toolbar
+          - Parametric demo plate with through-hole and pocket
+          - Property edit, BRep validation, FCStd save/reopen and STEP export
+          - Automated Windows interface screenshot
+          - Portable and Setup.exe packaging
+          - Native FreeCAD 1.1.1 engine and FCStd retained
+          - Original SolidFreeCAD visual resources only
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
