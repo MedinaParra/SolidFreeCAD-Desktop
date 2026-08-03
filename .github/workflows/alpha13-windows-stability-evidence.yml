@@ -1,0 +1,236 @@
+name: Alpha13 Windows runtime stability evidence
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha13-runtime-stabilization"
+    paths:
+      - ".github/workflows/alpha13-windows-stability-evidence.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha13_windows_stability.py"
+      - "docs/alpha13-runtime-stabilization.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha13-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FREECAD_TAG: "1.1.3"
+
+jobs:
+  windows-stability:
+    name: Validate alpha13 on official FreeCAD without packaging
+    runs-on: windows-2022
+    timeout-minutes: 70
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout source candidate
+        uses: actions/checkout@v4
+
+      - name: Validate Python source syntax
+        shell: pwsh
+        run: |
+          $files = @(
+            "overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py",
+            "overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspaceCompat.py",
+            "overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py",
+            "overlay/Mod/SolidFreeCAD/WorkspaceRC.py",
+            "overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py",
+            "overlay/Mod/SolidFreeCAD/Workbench.py",
+            "tests/solidfreecad_alpha13_windows_stability.py"
+          )
+          foreach ($file in $files) {
+            python -m py_compile $file
+            if ($LASTEXITCODE -ne 0) { throw "Python syntax validation failed: $file" }
+          }
+
+      - name: Download official FreeCAD runtime
+        shell: pwsh
+        run: |
+          $releaseJson = gh api "repos/FreeCAD/FreeCAD/releases/tags/$env:FREECAD_TAG"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to read the official FreeCAD release metadata." }
+          $release = $releaseJson | ConvertFrom-Json
+          $asset = @($release.assets) |
+            Where-Object {
+              $_.name -match '(?i)Windows.*x86_64.*\.7z$' -and
+              $_.name -notmatch '(?i)SHA256'
+            } |
+            Select-Object -First 1
+          if (-not $asset) {
+            $names = @($release.assets | ForEach-Object { $_.name }) -join "`n"
+            throw "No official Windows x86_64 7z asset was found for $env:FREECAD_TAG.`n$names"
+          }
+
+          $archive = Join-Path $env:RUNNER_TEMP $asset.name
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $archive -UseBasicParsing
+          if (-not (Test-Path -LiteralPath $archive)) { throw "FreeCAD runtime download failed." }
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($asset.digest -and $asset.digest -match '^sha256:(.+)$') {
+            $expected = $Matches[1].ToLowerInvariant()
+            if ($hash -ne $expected) {
+              throw "Official runtime SHA256 mismatch. Expected $expected, got $hash."
+            }
+          }
+
+          $runtime = Join-Path $env:RUNNER_TEMP "FreeCAD-$env:FREECAD_TAG-alpha13"
+          New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+          & 7z x $archive "-o$runtime" -y
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract the official FreeCAD runtime." }
+          Remove-Item -LiteralPath $archive -Force
+
+          $freecad = Get-ChildItem -LiteralPath $runtime -Filter "FreeCAD.exe" -File -Recurse |
+            Where-Object { $_.FullName -notmatch '(?i)uninstall' } |
+            Select-Object -First 1
+          if (-not $freecad) { throw "Extracted official runtime is missing FreeCAD.exe." }
+
+          $modRoot = Get-ChildItem -LiteralPath $runtime -Directory -Recurse |
+            Where-Object {
+              $_.Name -eq "Mod" -and
+              (Test-Path -LiteralPath (Join-Path $_.FullName "PartDesign"))
+            } |
+            Select-Object -First 1
+          if (-not $modRoot) { throw "Unable to locate the official FreeCAD Mod directory." }
+
+          $platformPlugin = Get-ChildItem -LiteralPath $runtime -Filter "qwindows.dll" -File -Recurse |
+            Select-Object -First 1
+          if (-not $platformPlugin) { throw "Unable to locate the Qt Windows platform plugin." }
+
+          "SOLIDFREECAD_RUNTIME=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_FREECAD_EXE=$($freecad.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_MOD_ROOT=$($modRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_QT_PLATFORM=$($platformPlugin.Directory.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_QT_PLUGINS=$($platformPlugin.Directory.Parent.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_RUNTIME_ASSET=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_RUNTIME_DIGEST=sha256:$hash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install alpha13 overlay into temporary runtime
+        shell: pwsh
+        run: |
+          $source = Resolve-Path "overlay/Mod/SolidFreeCAD"
+          $destination = Join-Path $env:SOLIDFREECAD_MOD_ROOT "SolidFreeCAD"
+          if (Test-Path -LiteralPath $destination) {
+            Remove-Item -LiteralPath $destination -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Copy-Item -Path (Join-Path $source "*") -Destination $destination -Recurse -Force
+          foreach ($required in @(
+            "RuntimeStabilityWorkspace.py",
+            "RuntimeStabilityWorkspaceCompat.py",
+            "RuntimePreflightWorkspace.py",
+            "WorkspaceRC.py",
+            "FeatureBindingWorkspace.py",
+            "Workbench.py",
+            "InitGui.py"
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $destination $required))) {
+              throw "Alpha13 overlay is missing $required."
+            }
+          }
+
+      - name: Run GUI, geometry and transaction stability evidence
+        shell: pwsh
+        run: |
+          $output = Join-Path (Resolve-Path ".") "dist/alpha13-stability"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          $marker = Join-Path $output "alpha13-marker.txt"
+          $stdout = Join-Path $output "alpha13-stdout.txt"
+          $stderr = Join-Path $output "alpha13-stderr.txt"
+          $script = (Resolve-Path "tests/solidfreecad_alpha13_windows_stability.py").Path
+          $freecad = $env:SOLIDFREECAD_FREECAD_EXE
+          $bin = Split-Path -Parent $freecad
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $pathEntries = @(
+              $bin,
+              $env:SOLIDFREECAD_RUNTIME,
+              (Join-Path $env:SOLIDFREECAD_RUNTIME "bin"),
+              (Join-Path $env:SOLIDFREECAD_RUNTIME "Library/bin"),
+              (Join-Path $env:SOLIDFREECAD_RUNTIME "Library/usr/bin"),
+              $previousPath
+            ) | Where-Object { $_ -and (($_ -eq $previousPath) -or (Test-Path -LiteralPath $_)) }
+            $env:PATH = $pathEntries -join ";"
+            Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+            $env:FREECAD_USER_HOME = Join-Path $env:RUNNER_TEMP "SolidFreeCAD-alpha13-user"
+            $env:FREECAD_USER_DATA = $env:FREECAD_USER_HOME
+            $env:QT_PLUGIN_PATH = $env:SOLIDFREECAD_QT_PLUGINS
+            $env:QT_QPA_PLATFORM_PLUGIN_PATH = $env:SOLIDFREECAD_QT_PLATFORM
+            $env:QT_QPA_PLATFORM = "windows"
+            $env:QT_OPENGL = "software"
+            $env:SOLIDFREECAD_ALPHA13_MARKER = $marker
+            $env:SOLIDFREECAD_ALPHA13_OUTPUT = $output
+            New-Item -ItemType Directory -Path $env:FREECAD_USER_HOME -Force | Out-Null
+
+            $process = Start-Process -FilePath $freecad -ArgumentList @($script) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            $deadline = (Get-Date).AddSeconds(210)
+            while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Seconds 2
+              $process.Refresh()
+            }
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              throw "Alpha13 stability test timed out."
+            }
+            if (-not (Test-Path -LiteralPath $marker)) {
+              throw "Alpha13 did not create its marker. Exit code: $($process.ExitCode)."
+            }
+            $markerText = Get-Content -LiteralPath $marker -Raw
+            Write-Host $markerText
+            $combinedPath = Join-Path $output "solidfreecad-alpha13-combined.json"
+            if (-not (Test-Path -LiteralPath $combinedPath)) {
+              throw "Alpha13 combined report was not created."
+            }
+            $combined = Get-Content -LiteralPath $combinedPath -Raw | ConvertFrom-Json
+            "### SolidFreeCAD alpha.13 Windows stability" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "- Runtime: $env:SOLIDFREECAD_RUNTIME_ASSET" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "- Preflight blocking failures: $($combined.preflight.blocking_failures)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "- Stability blocking failures: $($combined.stability.blocking_failures)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "- Stability warnings: $($combined.stability.warnings)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            if ($markerText -notmatch '^PASS') {
+              throw "Alpha13 Windows stability reported a blocking failure."
+            }
+          }
+          finally {
+            $env:PATH = $previousPath
+            if ($previousPythonHome) {
+              $env:PYTHONHOME = $previousPythonHome
+            } else {
+              Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Reject executable distribution outputs
+        if: always()
+        shell: pwsh
+        run: |
+          $forbidden = Get-ChildItem -LiteralPath "dist" -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in @(".exe", ".dll", ".msi", ".7z", ".zip") }
+          if ($forbidden) {
+            $forbidden | ForEach-Object { Write-Error "Forbidden distribution output: $($_.FullName)" }
+            throw "The evidence job produced a binary distribution output."
+          }
+
+      - name: Upload non-executable stability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha13-Windows-Stability-Evidence
+          path: |
+            dist/alpha13-stability/solidfreecad-alpha12-preflight.json
+            dist/alpha13-stability/solidfreecad-alpha13-stability.json
+            dist/alpha13-stability/solidfreecad-alpha13-combined.json
+            dist/alpha13-stability/solidfreecad-alpha13-interface.png
+            dist/alpha13-stability/alpha12-preflight.FCStd
+            dist/alpha13-stability/alpha12-preflight.step
+            dist/alpha13-stability/alpha13-transaction-roundtrip.FCStd
+            dist/alpha13-stability/alpha13-marker.txt
+            dist/alpha13-stability/alpha13-stdout.txt
+            dist/alpha13-stability/alpha13-stderr.txt
+          if-no-files-found: warn
+          retention-days: 14
