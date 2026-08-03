@@ -6,39 +6,39 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 
 **Windows x64 is the current product priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
 
-Current source prototype: **0.1.0-alpha.9-feature-managers**
+Current source prototype: **0.1.0-alpha.10-native-bindings**
 
-Alpha.9 remains intentionally **source only**. It does not publish a portable archive, Setup.exe or any executable. Packaging resumes only after the complete modeling workflow passes physical Windows review.
+Alpha.10 remains intentionally **source only**. It does not publish a portable archive, Setup.exe or any executable. Packaging resumes only after the complete modeling workflow passes physical Windows review.
 
-## Alpha.9 feature-manager prototype
+## Alpha.10 native-binding prototype
 
-Alpha.9 builds on the alpha.8 interaction shell and replaces generic editing with more focused mechanical-design guidance:
+Alpha.10 builds on the dedicated alpha.9 PropertyManagers and connects compatible geometric selections to real native feature properties:
 
-- dedicated definition profiles for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch;
-- property controls created only when the native FreeCAD object exposes the corresponding property;
-- operation-specific selection instructions and a geometric selection collector;
-- sketch geometry and relation commands inside the contextual panel;
-- sketch fully-defined or remaining-degree-of-freedom feedback;
-- two-column FeatureManager showing design object and state;
-- active Body tip, hidden-object, underdefined-sketch and invalid-BRep states;
-- optional native selection gates for faces, edges, vertices and bodies;
-- original orientation overlay for top, front, right, isometric and fit;
-- safe fallback from alpha.9 to alpha.8 and then to earlier validated shells.
+- selection capture through `Gui.Selection.getSelectionEx()`;
+- safe detection of native Link, LinkList, LinkSub and LinkSubList properties;
+- role-specific capture for profiles, axes, limiting faces, edges and points;
+- refusal to write when the active object exposes no compatible native property;
+- end-condition choices read from the object's own native enumeration;
+- document transactions for binding and condition changes;
+- debounced recomputation for preview stability;
+- conservative feature-session snapshots with explicit restore action;
+- readiness feedback showing missing profile, axis or edge inputs;
+- safe fallback from alpha.10 to alpha.9 and all earlier source shells.
 
-All modeling actions continue to delegate to registered native FreeCAD commands or edit native FreeCAD properties inside document transactions.
+All changes continue to edit native FreeCAD objects. SolidFreeCAD does not create a parallel geometry or document model.
 
-## Preserved alpha.8 foundation
+## Preserved interface foundation
 
-- edit-session awareness for sketches and features;
-- floating confirmation corner;
-- contextual Operation tab;
-- hierarchical design history and synchronized 3D selection;
-- `S` shortcut palette;
-- display-style and standard-view controls;
+- dedicated panels for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch;
+- edit-session awareness and floating confirmation corner;
+- hierarchical FeatureManager and synchronized 3D selection;
+- model and BRep state feedback;
+- contextual CommandManager switching and `S` shortcut palette;
+- original orientation and display controls;
 - adaptive desktop/laptop layout;
 - native FCStd, Part Design, Sketcher and OpenCASCADE geometry.
 
-Unavailable commands remain disabled rather than represented as completed features.
+Unavailable or incompatible operations remain disabled or report the native limitation rather than pretending to work.
 
 ## Original identity and compatibility
 
@@ -46,24 +46,25 @@ The project adopts established interaction patterns common to professional mecha
 
 ## Source-only validation
 
-The workflow `.github/workflows/alpha9-source-validation.yml` performs only:
+The workflow `.github/workflows/alpha10-source-validation.yml` performs only:
 
 - Python syntax compilation;
 - compatibility-chain checks;
-- verification that alpha.9 contains no installer or portable packaging commands.
+- native-binding contract marker checks;
+- verification that alpha.10 contains no installer or portable packaging commands.
 
 It does not compile FreeCAD, upload an artifact or generate an executable.
 
 Manual graphical contract:
 
 ```text
-tests/solidfreecad_alpha9_gui_smoke.py
+tests/solidfreecad_alpha10_gui_smoke.py
 ```
 
-Maturity criteria and remaining gaps:
+Maturity criteria and runtime gaps:
 
 ```text
-docs/alpha9-feature-manager-maturity.md
+docs/alpha10-native-binding-maturity.md
 ```
 
 ## Executable release gate
@@ -71,9 +72,9 @@ docs/alpha9-feature-manager-maturity.md
 A Windows executable remains blocked until physical tests confirm:
 
 1. `Part → Sketch → Pad → Edit → Pocket → Revolution → Fillet → Chamfer → Save → Reopen` works end to end.
-2. Dedicated panels update native preview and geometry without duplicate recomputes.
-3. Selection collectors write correct profile, axis, face and edge references.
-4. Accept and cancel restore the correct native transaction state.
+2. Profile, axis, face and edge collectors write the exact native references expected by FreeCAD 1.1.1.
+3. End conditions update native preview and geometry without duplicate recomputes.
+4. Accept, cancel, restore-session, Undo and Redo remain coherent.
 5. Tree, selection, Body tip and sketch status remain synchronized.
 6. Layout works at 1366×768, 1920×1080 and high DPI.
 7. Windows scaling works at 100%, 125%, 150% and 200%.
