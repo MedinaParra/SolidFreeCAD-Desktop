@@ -6,82 +6,86 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 
 **Windows x64 is the current product priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
 
-Current source prototype: **0.1.0-alpha.10-native-bindings**
+Current source candidate: **0.1.0-alpha.11-workspace-rc**
 
-Alpha.10 remains intentionally **source only**. It does not publish a portable archive, Setup.exe or any executable. Packaging resumes only after the complete modeling workflow passes physical Windows review.
+Alpha.11 is deliberately **source only**. It does not publish a portable archive, Setup.exe or executable. It is the final planned interface layer before a separately authorized Windows runtime-validation build.
 
-## Alpha.10 native-binding prototype
+## Alpha.11 workspace release candidate
 
-Alpha.10 builds on the dedicated alpha.9 PropertyManagers and connects compatible geometric selections to real native feature properties:
+Alpha.11 builds on the alpha.10 native feature bindings and focuses on sustained daily use:
 
-- selection capture through `Gui.Selection.getSelectionEx()`;
-- safe detection of native Link, LinkList, LinkSub and LinkSubList properties;
-- role-specific capture for profiles, axes, limiting faces, edges and points;
-- refusal to write when the active object exposes no compatible native property;
-- end-condition choices read from the object's own native enumeration;
-- document transactions for binding and condition changes;
-- debounced recomputation for preview stability;
-- conservative feature-session snapshots with explicit restore action;
-- readiness feedback showing missing profile, axis or edge inputs;
-- safe fallback from alpha.10 to alpha.9 and all earlier source shells.
+- original quick-access toolbar for New, Open, Save, Undo, Redo and Fit;
+- persistent laptop, standard and wide workspace profiles;
+- persistent compact, normal and comfortable control density;
+- system, light and dark visual modes;
+- automatic laptop-layout selection for narrow windows;
+- workspace reset action;
+- Verification tab with document diagnostics;
+- warnings for unsaved documents, invalid BRep and underdefined sketches;
+- command-coverage audit against the actual runtime;
+- safe visible-label rename inside a document transaction;
+- manual physical-release checklist;
+- safe fallback from alpha.11 to alpha.10 and every earlier source shell.
 
-All changes continue to edit native FreeCAD objects. SolidFreeCAD does not create a parallel geometry or document model.
+Alpha.11 does not claim that the runtime has passed. It makes the remaining failures visible and creates a controlled gate for physical Windows validation.
 
-## Preserved interface foundation
+## Preserved mechanical workflow
 
-- dedicated panels for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch;
+- dedicated PropertyManagers for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch;
+- native selection bindings for compatible profile, axis, face, edge and point properties;
+- end-condition options read from native FreeCAD enumerations;
 - edit-session awareness and floating confirmation corner;
 - hierarchical FeatureManager and synchronized 3D selection;
-- model and BRep state feedback;
+- model, sketch and BRep state feedback;
 - contextual CommandManager switching and `S` shortcut palette;
 - original orientation and display controls;
-- adaptive desktop/laptop layout;
 - native FCStd, Part Design, Sketcher and OpenCASCADE geometry.
 
-Unavailable or incompatible operations remain disabled or report the native limitation rather than pretending to work.
+Unavailable or incompatible operations remain disabled or are reported as runtime gaps rather than represented as completed functionality.
 
 ## Original identity and compatibility
 
 The project adopts established interaction patterns common to professional mechanical CAD so experienced users can work quickly. It does not bundle or copy proprietary SolidWorks source code, icons, logos, trademarks or exact artwork. All SolidFreeCAD visual resources are original.
 
-## Source-only validation
+## Source-RC validation
 
-The workflow `.github/workflows/alpha10-source-validation.yml` performs only:
+The workflow `.github/workflows/alpha11-source-validation.yml` performs only:
 
 - Python syntax compilation;
 - compatibility-chain checks;
-- native-binding contract marker checks;
-- verification that alpha.10 contains no installer or portable packaging commands.
+- release-candidate widget and transaction markers;
+- verification that alpha.11 contains no executable, installer or artifact generation.
 
-It does not compile FreeCAD, upload an artifact or generate an executable.
+It does not compile FreeCAD or publish a binary.
 
 Manual graphical contract:
 
 ```text
-tests/solidfreecad_alpha10_gui_smoke.py
+tests/solidfreecad_alpha11_gui_smoke.py
 ```
 
-Maturity criteria and runtime gaps:
+Runtime gate:
 
 ```text
-docs/alpha10-native-binding-maturity.md
+docs/alpha11-source-rc-gate.md
 ```
 
 ## Executable release gate
 
-A Windows executable remains blocked until physical tests confirm:
+A user-facing Windows executable remains blocked until physical tests confirm:
 
 1. `Part → Sketch → Pad → Edit → Pocket → Revolution → Fillet → Chamfer → Save → Reopen` works end to end.
-2. Profile, axis, face and edge collectors write the exact native references expected by FreeCAD 1.1.1.
+2. Profile, axis, face and edge bindings write the exact references required by FreeCAD 1.1.1.
 3. End conditions update native preview and geometry without duplicate recomputes.
 4. Accept, cancel, restore-session, Undo and Redo remain coherent.
 5. Tree, selection, Body tip and sketch status remain synchronized.
 6. Layout works at 1366×768, 1920×1080 and high DPI.
 7. Windows scaling works at 100%, 125%, 150% and 200%.
 8. FCStd, STEP and BRep behavior show no regression.
-9. A real interface screenshot and an extended Windows modeling session are reviewed.
+9. A real interface screenshot and an extended physical Windows session are reviewed.
+10. No blocking or high-severity diagnostic remains.
 
-Only after those gates pass will portable and installable builds be created in a separate iteration.
+Only after those gates pass and executable creation is explicitly authorized will portable and installable builds be produced.
 
 ## Repository layout
 
