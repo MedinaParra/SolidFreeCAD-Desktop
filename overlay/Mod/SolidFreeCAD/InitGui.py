@@ -69,12 +69,14 @@ class SolidFreeCADWorkbench(Gui.Workbench):
 
     def Activated(self):
         from SolidFreeCAD.MechanicalWorkspace import show_workspace
+        from SolidFreeCAD.CommandBridge import patch_command_manager
 
         _apply_window_branding()
         general = App.ParamGet("User parameter:BaseApp/Preferences/General")
         general.SetString("AutoloadModule", "SolidFreeCADWorkbench")
         general.SetString("LastModule", "SolidFreeCADWorkbench")
         show_workspace()
+        patch_command_manager()
 
     def Deactivated(self):
         from SolidFreeCAD.MechanicalWorkspace import hide_workspace
