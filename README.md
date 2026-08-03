@@ -6,58 +6,89 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 
 **Windows x64 is the current product priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
 
-Current source prototype: **0.1.0-alpha.7-interface**
+Current source prototype: **0.1.0-alpha.8-interaction**
 
-Alpha.7 is intentionally **source only**. This branch does not add, trigger or publish a portable build, Setup.exe or other executable. Packaging will resume only after the interface reaches its physical Windows acceptance gate.
+Alpha.8 remains intentionally **source only**. It does not publish a portable archive, Setup.exe or any executable. Packaging resumes only after the complete mechanical workflow passes physical Windows review.
 
-## Alpha.7 interface prototype
+## Alpha.8 interaction prototype
 
-Alpha.7 builds on the validated alpha.6 mechanical workspace and adds:
+Alpha.8 builds on the alpha.7 professional shell and adds the interaction layer needed for a mature desktop CAD workflow:
 
-- document context bar with active-document selector;
-- document/object breadcrumb and model-state feedback;
-- curated command search with `Ctrl+K`;
-- explicit recompute control;
-- right-side task pane with Tasks, Library, Appearances and Resources;
-- selection-aware native-property editor for common numeric parameters;
-- quick edit, visibility, zoom and recompute actions;
-- design library that delegates to registered FreeCAD commands;
-- native shape color and transparency controls;
-- safer context actions in the FeatureManager tree;
-- original SolidFreeCAD styling and resources only.
+- automatic detection of sketch and feature edit sessions;
+- floating confirmation corner inside the graphics area;
+- contextual **Operation** tab with accept, close, selection and native parameters;
+- sketch degree-of-freedom feedback when exposed by the FreeCAD runtime;
+- hierarchical design history grouped by parts, bodies, features and references;
+- synchronized tree and 3D selection;
+- visual indication of hidden and invalid objects;
+- contextual CommandManager tab switching;
+- `S` shortcut palette for sketch and feature commands;
+- display modes for shaded with edges, shaded and wireframe;
+- orientation menu for isometric and standard views;
+- adaptive side-panel sizing for desktop and laptop windows;
+- safe fallback to alpha.7 if the interaction layer cannot initialize.
 
-The project adopts interaction patterns common to professional mechanical CAD, but it does not bundle proprietary SolidWorks code, icons, trademarks or exact artwork.
+All modeling actions delegate to registered native FreeCAD commands or edit native FreeCAD properties. SolidFreeCAD does not create a parallel CAD document model.
 
-## Preserved alpha.6 foundation
+## Preserved alpha.7 and alpha.6 foundation
 
-- tabbed CommandManager for Operations, Sketch, Surfaces, Evaluate, Shaft, Sheet Metal and Assembly;
-- integrated FeatureManager design tree;
-- contextual PropertyManager with accept/cancel controls and guided messages;
-- configurations foundation;
-- compact Heads-Up view toolbar;
-- native FreeCAD commands and FCStd documents;
-- classic FreeCAD UI retained as a compatibility fallback;
-- parametric shaft and demonstration part;
-- BRep, FCStd and STEP validation from the previous Windows track.
+- document selector, breadcrumb, command search and model-state feedback;
+- right-side Tasks, Library, Appearances and Resources pane;
+- CommandManager for Operations, Sketch, Surfaces, Evaluate, Shaft, Sheet Metal and Assembly;
+- FeatureManager and PropertyManager foundations;
+- configurations foundation and Heads-Up view toolbar;
+- native FCStd, Part Design, Sketcher and OpenCASCADE geometry;
+- parametric shaft and demonstration component;
+- classic FreeCAD compatibility fallback;
+- previous BRep, FCStd and STEP validation work.
 
 Unavailable commands remain disabled rather than represented as completed features.
 
+## Original identity and compatibility
+
+The project adopts established interaction patterns common to professional mechanical CAD so experienced users can work quickly. It does not bundle or copy proprietary SolidWorks source code, icons, logos, trademarks or exact artwork. All SolidFreeCAD visual resources are original and the native FreeCAD engine remains visible in the product architecture.
+
 ## Source-only validation
 
-The manual test `tests/solidfreecad_alpha7_gui_smoke.py` checks the alpha.7 widget contract inside a validated FreeCAD runtime. It is deliberately not connected to a packaging workflow.
+The workflow `.github/workflows/alpha8-source-validation.yml` performs only:
 
-The design and future release gate are documented in:
+- Python syntax compilation;
+- compatibility-loader checks;
+- verification that alpha.8 contains no installer or portable packaging commands.
+
+It does not compile FreeCAD, upload an artifact or generate an executable.
+
+The manual graphical contract test is:
 
 ```text
-docs/alpha7-interface-blueprint.md
+tests/solidfreecad_alpha8_gui_smoke.py
 ```
 
-A future executable is allowed only after physical Windows review confirms DPI scaling, layout stability, shortcut safety, multi-document behavior, property editing and no regression in native geometry or files.
+The maturity criteria and release gate are documented in:
+
+```text
+docs/alpha8-interaction-maturity.md
+```
+
+## Executable release gate
+
+A Windows executable remains blocked until physical tests confirm:
+
+1. `Part → Sketch → Pad → Edit → Pocket → Fillet → Save → Reopen` works end to end.
+2. Sketch shortcuts and confirmation controls do not conflict with native tools.
+3. Feature parameters update preview and geometry safely.
+4. Tree hierarchy, selections and multi-document behavior remain synchronized.
+5. Layout works at 1366×768, 1920×1080 and high DPI.
+6. Windows scaling works at 100%, 125%, 150% and 200%.
+7. FCStd, STEP and BRep behavior show no regression.
+8. A real interface screenshot and an extended Windows session are reviewed.
+
+Only after those gates pass will portable and installable builds be created in a separate iteration.
 
 ## Repository layout
 
 ```text
-.github/workflows/        Existing validated alpha.6 build workflows
+.github/workflows/        Source validation and previous validated build tracks
 docs/                     Architecture, interface gates and integration contracts
 overlay/Mod/SolidFreeCAD/ Shared SolidFreeCAD workbench and GUI overlay
 platform/windows/         Windows packaging notes
