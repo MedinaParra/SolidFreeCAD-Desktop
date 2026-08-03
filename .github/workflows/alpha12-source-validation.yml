@@ -6,8 +6,10 @@ on:
       - "agent/windows-alpha12-runtime-preflight-source"
     paths:
       - ".github/workflows/alpha12-source-validation.yml"
+      - ".github/workflows/alpha12-windows-preflight-no-package.yml"
       - "overlay/Mod/SolidFreeCAD/**"
       - "tests/solidfreecad_alpha12_gui_smoke.py"
+      - "tests/solidfreecad_alpha12_windows_preflight.py"
       - "docs/alpha12-runtime-preflight.md"
       - "README.md"
       - "CHANGELOG.md"
@@ -41,7 +43,8 @@ jobs:
             overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspaceCompat.py \
             overlay/Mod/SolidFreeCAD/WorkspaceRC.py \
             overlay/Mod/SolidFreeCAD/Workbench.py \
-            tests/solidfreecad_alpha12_gui_smoke.py
+            tests/solidfreecad_alpha12_gui_smoke.py \
+            tests/solidfreecad_alpha12_windows_preflight.py
 
       - name: Verify compatibility chain
         run: |
@@ -55,9 +58,10 @@ jobs:
           grep -q 'Part.export' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
           grep -q 'App.openDocument' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
           grep -q 'Part.insert' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
+          grep -q 'SOLIDFREECAD_ALPHA12_OUTPUT' tests/solidfreecad_alpha12_windows_preflight.py
           test -f docs/alpha12-runtime-preflight.md
 
-      - name: Verify alpha12 remains source-only
+      - name: Verify source workflow remains packaging-free
         shell: bash
         run: |
           test ! -e scripts/alpha12-windows
@@ -71,4 +75,5 @@ jobs:
             'ISCC\.exe|Package-Alpha12|Setup\.exe|\.7z' \
             overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py \
             overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspaceCompat.py \
-            tests/solidfreecad_alpha12_gui_smoke.py
+            tests/solidfreecad_alpha12_gui_smoke.py \
+            tests/solidfreecad_alpha12_windows_preflight.py
