@@ -58,7 +58,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
             self.appendMenu("SolidFreeCAD", workflow_commands)
 
     def Activated(self):
-        from SolidFreeCAD.ProfessionalWorkspace import show_workspace
+        from SolidFreeCAD.ProfessionalWorkspaceCompat import show_workspace
         from SolidFreeCAD.CommandBridge import patch_command_manager
 
         _apply_window_branding()
@@ -69,7 +69,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
         patch_command_manager()
 
     def Deactivated(self):
-        from SolidFreeCAD.ProfessionalWorkspace import hide_workspace
+        from SolidFreeCAD.ProfessionalWorkspaceCompat import hide_workspace
 
         hide_workspace()
 
