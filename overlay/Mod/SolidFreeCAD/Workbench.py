@@ -18,7 +18,7 @@ def _available(command_names):
 
 def _apply_window_branding():
     main_window = Gui.getMainWindow()
-    main_window.setWindowTitle("SolidFreeCAD Desktop alpha.6")
+    main_window.setWindowTitle("SolidFreeCAD Desktop alpha.7 · Interface Prototype")
     main_window.setWindowIcon(QtGui.QIcon(_ICON_PATH))
     status_label = main_window.findChild(QtWidgets.QLabel, "SolidFreeCADStatusBrand")
     if status_label is None:
@@ -58,7 +58,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
             self.appendMenu("SolidFreeCAD", workflow_commands)
 
     def Activated(self):
-        from SolidFreeCAD.MechanicalWorkspace import show_workspace
+        from SolidFreeCAD.ProfessionalWorkspace import show_workspace
         from SolidFreeCAD.CommandBridge import patch_command_manager
 
         _apply_window_branding()
@@ -69,7 +69,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
         patch_command_manager()
 
     def Deactivated(self):
-        from SolidFreeCAD.MechanicalWorkspace import hide_workspace
+        from SolidFreeCAD.ProfessionalWorkspace import hide_workspace
 
         hide_workspace()
 
