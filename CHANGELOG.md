@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0-alpha.13-runtime-stabilization
+
+- Raised the supported Windows validation baseline to official FreeCAD 1.1.3.
+- Replaced the expiring internal runtime-artifact dependency with dynamic official release discovery.
+- Added official asset name and SHA-256 runtime provenance.
+- Added exact-one-instance checks for critical SolidFreeCAD widgets.
+- Added blocking critical-command coverage and warning-level secondary coverage.
+- Added persisted layout, density and theme validation.
+- Added automated 1366×768 and 1920×1080 accessibility checks.
+- Added isolated native transaction, Undo and Redo verification.
+- Added FCStd transaction persistence and active-document restoration checks.
+- Added the alpha.13 Stability page and structured JSON report.
+- Added a Windows evidence workflow that rejects executable distribution outputs.
+- Added alpha.13 fallback to alpha.12.
+- Did not build, package or publish a SolidFreeCAD executable.
+
 ## 0.1.0-alpha.12-runtime-preflight-source
 
 - Added a local Preflight page inside the Verification panel.
