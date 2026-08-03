@@ -10,6 +10,8 @@
 - Added FCStd save, close, reopen and volume comparison.
 - Added STEP export, import and shape validation.
 - Added structured local JSON report and temporary evidence folder.
+- Added a Windows CI preflight that reuses an existing runtime without compiling or packaging.
+- Added a binary-output rejection gate and non-executable evidence artifact.
 - Added alpha.12 fallback to alpha.11.
 - Did not compile, package, upload or publish any Windows executable.
 
