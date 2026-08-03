@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0-alpha.14-interactive-acceptance
+
+- Added a guided physical-acceptance page inside the Verification panel.
+- Added conservative detection for Body, Sketch, Pad, Pad edit mode, Pocket, Revolution, Fillet and Chamfer.
+- Added saved-FCStd path capture and close/reopen verification.
+- Added explicit manual evidence for Undo/Redo, Windows scaling and long-session stability.
+- Added per-step interface screenshots and native document snapshots.
+- Added object type, visibility, BRep validity, volume and 3D selection evidence.
+- Added passed, failed and pending state management for every acceptance step.
+- Added a structured local acceptance JSON report.
+- Added alpha.14 fallback to alpha.13.
+- Added a graphical contract and source-only validation workflow.
+- Did not build, package, upload or publish a SolidFreeCAD executable.
+
 ## 0.1.0-alpha.13-runtime-stabilization
 
 - Raised the supported Windows validation baseline to official FreeCAD 1.1.3.
