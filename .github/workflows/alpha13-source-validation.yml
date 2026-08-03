@@ -1,0 +1,80 @@
+name: Alpha13 source-only runtime stabilization validation
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha13-runtime-stabilization"
+    paths:
+      - ".github/workflows/alpha13-source-validation.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha13_gui_smoke.py"
+      - "tests/solidfreecad_alpha13_windows_stability.py"
+      - "docs/alpha13-runtime-stabilization.md"
+      - "README.md"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha13-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Validate alpha13 source and no-package boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile alpha13 Python sources
+        run: |
+          python -m py_compile \
+            overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py \
+            overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspaceCompat.py \
+            overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py \
+            overlay/Mod/SolidFreeCAD/WorkspaceRC.py \
+            overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py \
+            overlay/Mod/SolidFreeCAD/Workbench.py \
+            tests/solidfreecad_alpha13_gui_smoke.py \
+            tests/solidfreecad_alpha13_windows_stability.py
+
+      - name: Verify compatibility chain
+        run: |
+          grep -q 'RuntimeStabilityWorkspaceCompat' overlay/Mod/SolidFreeCAD/Workbench.py
+          grep -q 'RuntimePreflightWorkspaceCompat' overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspaceCompat.py
+
+      - name: Verify stabilization contract
+        run: |
+          grep -q 'MINIMUM_RUNTIME = (1, 1, 3)' overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py
+          grep -q 'doc.undo()' overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py
+          grep -q 'doc.redo()' overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py
+          grep -q 'alpha13-transaction-roundtrip.FCStd' overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py
+          grep -q 'SolidFreeCADAlpha13StabilityPage' tests/solidfreecad_alpha13_gui_smoke.py
+          test -f docs/alpha13-runtime-stabilization.md
+
+      - name: Verify alpha13 remains source-only
+        shell: bash
+        run: |
+          test ! -e scripts/alpha13-windows
+          test ! -e platform/windows/alpha13-package
+          needle="actions/upload""-artifact"
+          if grep -q "$needle" .github/workflows/alpha13-source-validation.yml; then
+            echo "The source-only workflow must not upload artifacts."
+            exit 1
+          fi
+          ! grep -R --line-number -E \
+            'ISCC\.exe|Package-Alpha13|Setup\.exe|\.msi|\.7z' \
+            overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py \
+            overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspaceCompat.py \
+            tests/solidfreecad_alpha13_gui_smoke.py \
+            tests/solidfreecad_alpha13_windows_stability.py
