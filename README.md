@@ -1,60 +1,99 @@
 # SolidFreeCAD Desktop
 
-SolidFreeCAD Desktop is a Qt/C++ graphical interface built on the official FreeCAD source code.
+SolidFreeCAD Desktop is a mechanical-design interface built on the official FreeCAD engine. It preserves native FCStd documents, OpenCASCADE geometry, Part Design, Sketcher, TechDraw, FEM, Python and the classic FreeCAD interface while presenting a more integrated task-oriented workflow.
 
-## Foundation
+## Current release track
 
-- Official upstream: `FreeCAD/FreeCAD`
-- Current pinned source tag: `1.1.1`
-- GUI technology: Qt Widgets and C++
-- CAD kernel and document system: official FreeCAD components
-- Supported development tracks: Windows x64 and Ubuntu Linux x86-64
+**Windows x64 is the current delivery priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
 
-SolidFreeCAD does not replace OpenCASCADE, FCStd, PartDesign, Sketcher, Assembly, TechDraw, FEM, Python, Coin3D or the official command framework. It reorganizes those capabilities through a mechanical-design-oriented interface inspired by the existing SolidFreeCAD Android concept.
+Current development version: **0.1.0-alpha.6**
 
-## Platform strategy
+## Alpha.6 interface
 
-The project keeps both desktop targets active:
+The alpha.6 workspace introduces a familiar mechanical-CAD structure using original SolidFreeCAD code and artwork:
 
-- **Windows x64 is the current delivery priority.** Work will focus on reproducible GitHub Actions builds, a portable package and a Windows installer.
-- **Ubuntu Linux remains an official future target.** Existing Ubuntu plans are preserved and platform-specific work must not be removed while Windows development advances.
-- Shared CAD, GUI and branding code belongs in common directories. Platform-specific scripts, packaging and workflows belong under their own platform directories.
+- tabbed CommandManager for Operations, Sketch, Surfaces, Evaluate, Shaft, Sheet Metal and Assembly;
+- integrated FeatureManager design tree;
+- contextual PropertyManager with accept/cancel controls and guided messages;
+- configurations foundation;
+- compact Heads-Up view toolbar;
+- native FreeCAD commands and FCStd documents underneath the new interface;
+- classic FreeCAD UI retained as a compatibility fallback.
 
-See [`docs/platform-strategy.md`](docs/platform-strategy.md) for the repository rules.
+The project may adopt established interaction patterns common to professional mechanical CAD, but it does not bundle proprietary SolidWorks code, icons, trademarks or artwork.
+
+## Functional and validated
+
+- Windows Qt runtime repair and `qwindows.dll` packaging;
+- isolated portable configuration;
+- branded launcher, portable package and Inno Setup installer;
+- native document and Part Design Body creation;
+- native FreeCAD command delegation for sketches and features;
+- editable parametric shaft with optional keyway;
+- parametric alpha.6 demonstration plate with through-hole and pocket;
+- BRep validation;
+- FCStd save, close and reopen validation;
+- STEP export validation;
+- automated GUI structure test and Windows interface screenshot;
+- original SVG icon pack.
+
+## Experimental
+
+- sheet-metal commands depend on an installed compatible SheetMetal workbench;
+- assembly commands depend on the assembly commands available in the pinned FreeCAD runtime;
+- some advanced surface and evaluation commands vary by FreeCAD build;
+- the interface still requires physical review on Windows for spacing, DPI scaling and long editing sessions.
+
+Unavailable commands are disabled rather than represented as working features.
 
 ## Repository layout
 
 ```text
-.github/workflows/        GitHub Actions workflows by platform
-docs/                     Architecture and roadmap documentation
-platform/windows/         Windows-specific packaging and platform notes
-platform/ubuntu/          Ubuntu-specific packaging and platform notes
-scripts/windows/          Windows bootstrap, build and packaging scripts
-scripts/ubuntu/           Ubuntu bootstrap, build and packaging scripts
-src/                      Shared SolidFreeCAD source and GUI overlay
-branding/                 Shared icons, splash screens and product assets
+.github/workflows/        Windows CI and release validation
+docs/                     Architecture, visual system and integration contracts
+overlay/Mod/SolidFreeCAD/ Shared SolidFreeCAD workbench and GUI overlay
+platform/windows/         Windows packaging notes
+platform/ubuntu/          Preserved Ubuntu target
+scripts/windows/          Windows build and packaging scripts
+tests/                    Headless and graphical validation
 ```
 
-## Repository strategy
+## Windows alpha.6 validation flow
 
-This repository starts as a reproducible GUI overlay. Build scripts obtain the official FreeCAD source, apply the isolated SolidFreeCAD layer and compile the resulting application.
+The workflow `.github/workflows/windows-alpha6-solidworks-workflow.yml`:
 
-This keeps iterations small and reviewable while ensuring builds use the official FreeCAD engine.
+1. reuses the validated alpha.5 Windows runtime;
+2. installs the alpha.6 overlay;
+3. validates Python, SVG and JSON contracts;
+4. creates and edits a parametric part;
+5. validates its BRep;
+6. saves and reopens FCStd;
+7. exports STEP;
+8. validates the GUI structure;
+9. captures a Windows screenshot;
+10. generates portable and Setup.exe artifacts with SHA-256 files.
 
-## Current milestone: Windows foundation
+## Application-mother integration
 
-The first Windows milestone targets:
+The project contract under `docs/solidfreecad-project.schema.json` prepares future links with:
 
-- Windows x64 build on GitHub Actions.
-- Official FreeCAD engine and 3D viewer.
-- SolidFreeCAD ribbon prototype.
-- Native New, Open, Save, Undo and Redo commands.
-- Native fit-all and isometric view commands.
-- FCStd and STEP/STP opening.
-- Portable ZIP artifact.
-- Installer artifact after the portable build is stable.
-- Classic FreeCAD interface retained as compatibility mode.
+- Android photogrammetry and reconstructed geometry;
+- work orders and asset identity;
+- geometry confidence and validation status;
+- FCStd/STEP exchange;
+- source images and operator corrections.
 
-## Ubuntu continuity
+No cloud dependency is required by this contract.
 
-Ubuntu development is not cancelled or replaced. Its source, documentation and future workflows remain under `platform/ubuntu` and `scripts/ubuntu`. Windows-specific changes must not introduce assumptions that prevent a later Linux build.
+## Foundation
+
+- Official upstream: `FreeCAD/FreeCAD`
+- Pinned source tag: `1.1.1`
+- GUI: Qt/Python overlay plus native FreeCAD commands
+- CAD kernel: official FreeCAD/OpenCASCADE runtime
+- Primary platform: Windows x64
+- Future platform: Ubuntu Linux x86-64
+
+## License
+
+See the repository license and third-party notices. SolidFreeCAD must remain compatible with the licenses of FreeCAD, Qt, OpenCASCADE, Python and the packaged dependencies.
