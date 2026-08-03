@@ -1,0 +1,74 @@
+name: Alpha11 source release-candidate validation
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha11-workspace-rc"
+    paths:
+      - ".github/workflows/alpha11-source-validation.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha11_gui_smoke.py"
+      - "docs/alpha11-source-rc-gate.md"
+      - "README.md"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha11-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Validate alpha11 source RC and no-package boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile source-RC Python
+        run: |
+          python -m py_compile \
+            overlay/Mod/SolidFreeCAD/WorkspaceRC.py \
+            overlay/Mod/SolidFreeCAD/WorkspaceRCCompat.py \
+            overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py \
+            overlay/Mod/SolidFreeCAD/Workbench.py \
+            tests/solidfreecad_alpha11_gui_smoke.py
+
+      - name: Verify compatibility chain
+        run: |
+          grep -q 'WorkspaceRCCompat' overlay/Mod/SolidFreeCAD/Workbench.py
+          grep -q 'FeatureBindingWorkspaceCompat' overlay/Mod/SolidFreeCAD/WorkspaceRCCompat.py
+
+      - name: Verify release-candidate interface markers
+        run: |
+          grep -q 'SolidFreeCADAlpha11QuickAccess' overlay/Mod/SolidFreeCAD/WorkspaceRC.py
+          grep -q 'SolidFreeCADAlpha11Diagnostics' overlay/Mod/SolidFreeCAD/WorkspaceRC.py
+          grep -q 'SolidFreeCADAlpha11Coverage' overlay/Mod/SolidFreeCAD/WorkspaceRC.py
+          grep -q 'SolidFreeCADAlpha11ReleaseChecklist' overlay/Mod/SolidFreeCAD/WorkspaceRC.py
+          grep -q 'openTransaction' overlay/Mod/SolidFreeCAD/WorkspaceRC.py
+          test -f docs/alpha11-source-rc-gate.md
+
+      - name: Verify no executable or artifact generation
+        shell: bash
+        run: |
+          test ! -e scripts/alpha11-windows
+          test ! -e platform/windows/alpha11-package
+          needle="actions/upload""-artifact"
+          if grep -q "$needle" .github/workflows/alpha11-source-validation.yml; then
+            echo "Alpha11 source RC must not upload artifacts."
+            exit 1
+          fi
+          ! grep -R --line-number -E \
+            'ISCC\.exe|Package-Alpha11|Setup\.exe|\.7z|\.exe' \
+            overlay/Mod/SolidFreeCAD/WorkspaceRC.py \
+            overlay/Mod/SolidFreeCAD/WorkspaceRCCompat.py \
+            tests/solidfreecad_alpha11_gui_smoke.py
