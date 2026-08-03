@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.0-alpha.9-feature-managers
+
+- Added dedicated profiles for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch.
+- Added native-property-only controls and operation-specific instructions.
+- Added a geometric selection collector with refresh and clear actions.
+- Added sketch geometry, dimension and relation commands to the contextual panel.
+- Added two-column FeatureManager design/state presentation.
+- Added Body tip, hidden, sketch-definition and invalid-BRep states.
+- Added optional native selection gates for faces, edges, vertices and bodies.
+- Added an original compact orientation overlay.
+- Added an alpha.9 compatibility fallback to alpha.8.
+- Added a manual alpha.9 GUI contract test and source-only syntax validation.
+- Did not compile, package or publish any Windows executable.
+
 ## 0.1.0-alpha.8-interaction
 
 - Added native edit-session detection for sketches and features.
