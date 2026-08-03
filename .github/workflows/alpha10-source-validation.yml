@@ -1,0 +1,73 @@
+name: Alpha10 source-only native-binding validation
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha10-native-bindings"
+    paths:
+      - ".github/workflows/alpha10-source-validation.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha10_gui_smoke.py"
+      - "docs/alpha10-native-binding-maturity.md"
+      - "README.md"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha10-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Validate alpha10 Python and source-only boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile alpha10 Python sources
+        run: |
+          python -m py_compile \
+            overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py \
+            overlay/Mod/SolidFreeCAD/FeatureBindingWorkspaceCompat.py \
+            overlay/Mod/SolidFreeCAD/FeatureManagerWorkspace.py \
+            overlay/Mod/SolidFreeCAD/Workbench.py \
+            tests/solidfreecad_alpha10_gui_smoke.py
+
+      - name: Verify compatibility chain
+        run: |
+          grep -q 'FeatureBindingWorkspaceCompat' overlay/Mod/SolidFreeCAD/Workbench.py
+          grep -q 'FeatureManagerWorkspaceCompat' overlay/Mod/SolidFreeCAD/FeatureBindingWorkspaceCompat.py
+
+      - name: Verify native-binding contract markers
+        run: |
+          grep -q 'PropertyLinkSubList' overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py
+          grep -q 'getEnumerationsOfProperty' overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py
+          grep -q 'openTransaction' overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py
+          grep -q 'abortTransaction' overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py
+
+      - name: Verify alpha10 source-only boundary
+        shell: bash
+        run: |
+          test -f docs/alpha10-native-binding-maturity.md
+          test ! -e scripts/alpha10-windows
+          test ! -e platform/windows/alpha10-package
+          needle="actions/upload""-artifact"
+          if grep -q "$needle" .github/workflows/alpha10-source-validation.yml; then
+            echo "Alpha10 source validation must not upload artifacts."
+            exit 1
+          fi
+          ! grep -R --line-number -E \
+            'ISCC\.exe|Package-Alpha10|Setup\.exe|\.7z' \
+            overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py \
+            overlay/Mod/SolidFreeCAD/FeatureBindingWorkspaceCompat.py \
+            tests/solidfreecad_alpha10_gui_smoke.py
