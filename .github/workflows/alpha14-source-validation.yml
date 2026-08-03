@@ -1,0 +1,75 @@
+name: Alpha14 source-only interactive acceptance validation
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha14-interactive-acceptance"
+    paths:
+      - ".github/workflows/alpha14-source-validation.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha14_gui_smoke.py"
+      - "docs/alpha14-interactive-acceptance.md"
+      - "README.md"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha14-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Validate alpha14 source and no-package boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile alpha14 Python sources
+        run: |
+          python -m py_compile \
+            overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspace.py \
+            overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspaceCompat.py \
+            overlay/Mod/SolidFreeCAD/RuntimeStabilityWorkspace.py \
+            overlay/Mod/SolidFreeCAD/Workbench.py \
+            tests/solidfreecad_alpha14_gui_smoke.py
+
+      - name: Verify compatibility chain
+        run: |
+          grep -q 'InteractiveAcceptanceWorkspaceCompat' overlay/Mod/SolidFreeCAD/Workbench.py
+          grep -q 'RuntimeStabilityWorkspaceCompat' overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspaceCompat.py
+
+      - name: Verify acceptance contract
+        run: |
+          grep -q 'solidfreecad-alpha14-acceptance.json' overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspace.py
+          grep -q 'dpi-100' overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspace.py
+          grep -q 'dpi-200' overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspace.py
+          grep -q 'long-session' overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspace.py
+          grep -q 'SolidFreeCADAlpha14AcceptancePage' tests/solidfreecad_alpha14_gui_smoke.py
+          test -f docs/alpha14-interactive-acceptance.md
+
+      - name: Verify alpha14 remains source-only
+        shell: bash
+        run: |
+          test ! -e scripts/alpha14-windows
+          test ! -e platform/windows/alpha14-package
+          needle="actions/upload""-artifact"
+          if grep -q "$needle" .github/workflows/alpha14-source-validation.yml; then
+            echo "The alpha14 source workflow must not upload artifacts."
+            exit 1
+          fi
+          ! grep -R --line-number -E \
+            'ISCC\.exe|Package-Alpha14|Setup\.exe|\.msi|\.7z' \
+            overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspace.py \
+            overlay/Mod/SolidFreeCAD/InteractiveAcceptanceWorkspaceCompat.py \
+            tests/solidfreecad_alpha14_gui_smoke.py
