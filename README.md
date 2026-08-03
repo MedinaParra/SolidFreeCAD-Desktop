@@ -6,64 +6,84 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 
 **Windows x64 is the current product priority.** Ubuntu remains a future target and shared CAD/UI code stays platform-neutral.
 
-Current source candidate: **0.1.0-alpha.13-runtime-stabilization**
+Current source candidate: **0.1.0-alpha.14-interactive-acceptance**
 
-Alpha.13 remains deliberately **source only**. It does not build or publish a SolidFreeCAD portable archive, installer or executable. Its purpose is to stabilize the runtime contract before any distribution build is authorized.
+Alpha.14 remains deliberately **source only**. It does not build or publish a SolidFreeCAD portable archive, installer or executable. It adds the final guided physical-acceptance layer required before packaging can be considered.
 
-## Alpha.13 runtime stabilization
+## Alpha.14 interactive acceptance
 
-Alpha.13 builds on the alpha.12 local preflight and adds:
+Alpha.14 adds an **Aceptación** tab inside the Verification panel. A tester starts a local evidence session and performs the real modeling and usability sequence step by step.
 
-- supported runtime baseline of official FreeCAD 1.1.3 or newer compatible 1.1.x maintenance release;
-- runtime fingerprint with FreeCAD, Python, Qt, platform, executable and official asset digest;
+The recorder covers:
+
+- Part and Body creation;
+- Sketch creation;
+- Pad / Saliente;
+- Pad edit mode and parameter change;
+- Pocket / Corte;
+- Revolution with a native axis;
+- Fillet / Redondeo;
+- Chamfer / Chaflán;
+- FCStd save;
+- closing and reopening the same FCStd;
+- Undo and Redo confirmation;
+- Windows scaling at 100%, 125%, 150% and 200%;
+- an extended session of at least 45 minutes.
+
+Native objects and edit states are detected conservatively. DPI, long-session and Undo/Redo observations require explicit human confirmation. Any step can be marked as failed with a defect description.
+
+Each captured step stores a local screenshot and a document snapshot containing object type IDs, labels, visibility, BRep validity, volume, FCStd path and current 3D selection.
+
+The session is approved only when every step is passed, none is failed and none remains pending.
+
+## Alpha.14 local evidence
+
+A completed physical session writes:
+
+```text
+solidfreecad-alpha14-acceptance.json
+alpha14-body.png
+alpha14-sketch.png
+alpha14-pad.png
+alpha14-edit-pad.png
+alpha14-pocket.png
+alpha14-revolution.png
+alpha14-fillet.png
+alpha14-chamfer.png
+alpha14-save.png
+alpha14-reopen.png
+alpha14-undo-redo.png
+alpha14-dpi-100.png
+alpha14-dpi-125.png
+alpha14-dpi-150.png
+alpha14-dpi-200.png
+alpha14-long-session.png
+```
+
+Nothing is uploaded automatically.
+
+## Preserved alpha.13 runtime stabilization
+
+Alpha.13 remains the automated Windows gate beneath alpha.14:
+
+- official FreeCAD 1.1.3 validation baseline;
+- runtime fingerprint and official asset digest;
 - exact-one-instance checks for critical SolidFreeCAD panels and toolbars;
-- blocking command coverage for files, sketches and Part Design operations;
+- critical command coverage;
 - persistent workspace preference validation;
-- automated 1366×768 and 1920×1080 layout accessibility checks;
-- isolated document transaction test;
-- Undo and Redo verification using native parameters and BRep volume;
+- automated 1366×768 and 1920×1080 layout checks;
+- isolated document transactions;
+- native Undo and Redo verification;
 - FCStd save, close, reopen and persistence verification;
-- restoration of the previously active document after testing;
-- a dedicated **Estabilidad** page inside the Verification panel;
-- recovery chain from alpha.13 through every earlier source layer.
+- restoration of the previously active document.
 
-Alpha.13 adds no new modeling feature. It exists to expose duplicated UI, incompatible runtimes, broken transactions and persistence failures before an executable is considered.
-
-## Official Windows runtime evidence
-
-The workflow:
+The Windows evidence workflow is:
 
 ```text
 .github/workflows/alpha13-windows-stability-evidence.yml
 ```
 
-queries the official `FreeCAD/FreeCAD` release metadata, downloads the official FreeCAD 1.1.3 Windows x86_64 archive into the runner temporary directory, records its SHA-256 digest and discovers the real executable, Mod directory and Qt platform plugin.
-
-It then overlays the SolidFreeCAD source and runs:
-
-1. alpha.12 interface, command, BRep, FCStd and STEP preflight;
-2. alpha.13 runtime, UI uniqueness, layout, transaction, Undo/Redo and persistence checks.
-
-The official runtime is used only as a temporary test bench. It is not repackaged, renamed or uploaded.
-
-The job rejects `.exe`, `.dll`, `.msi`, `.7z` and `.zip` files under the evidence output directory.
-
-## Non-executable evidence
-
-The Windows evidence job may retain only:
-
-```text
-solidfreecad-alpha12-preflight.json
-solidfreecad-alpha13-stability.json
-solidfreecad-alpha13-combined.json
-solidfreecad-alpha13-interface.png
-alpha12-preflight.FCStd
-alpha12-preflight.step
-alpha13-transaction-roundtrip.FCStd
-alpha13-marker.txt
-alpha13-stdout.txt
-alpha13-stderr.txt
-```
+It uses the official FreeCAD runtime only as a temporary test bench, rejects executable distribution outputs and retains only non-executable JSON, PNG, FCStd, STEP and log evidence.
 
 ## Preserved interface and modeling foundation
 
@@ -76,7 +96,8 @@ alpha13-stderr.txt
 - runtime-derived end conditions and debounced recomputation;
 - edit-session awareness and floating confirmation corner;
 - hierarchical FeatureManager and synchronized 3D selection;
-- native FCStd, Part Design, Sketcher and OpenCASCADE geometry.
+- native FCStd, Part Design, Sketcher and OpenCASCADE geometry;
+- recovery chain from alpha.14 through every earlier source layer.
 
 Unavailable or incompatible operations remain disabled or are reported as runtime gaps rather than represented as completed functionality.
 
@@ -86,28 +107,28 @@ The project adopts established interaction patterns common to professional mecha
 
 ## Validation entry points
 
-Source-only validation:
+Alpha.14 source-only validation:
 
 ```text
-.github/workflows/alpha13-source-validation.yml
+.github/workflows/alpha14-source-validation.yml
 ```
 
-Manual graphical contract:
+Alpha.14 graphical contract:
 
 ```text
-tests/solidfreecad_alpha13_gui_smoke.py
+tests/solidfreecad_alpha14_gui_smoke.py
 ```
 
-Automated Windows stability entry point:
+Alpha.14 physical-acceptance specification:
+
+```text
+docs/alpha14-interactive-acceptance.md
+```
+
+Alpha.13 automated Windows stability entry point:
 
 ```text
 tests/solidfreecad_alpha13_windows_stability.py
-```
-
-Stabilization specification:
-
-```text
-docs/alpha13-runtime-stabilization.md
 ```
 
 ## Executable release gate
@@ -115,8 +136,8 @@ docs/alpha13-runtime-stabilization.md
 A user-facing Windows executable remains blocked until:
 
 1. alpha.12 preflight and alpha.13 stability pass on the official supported runtime;
-2. the generated interface screenshot is visually reviewed;
-3. `Part → Sketch → Pad → Edit → Pocket → Revolution → Fillet → Chamfer → Save → Reopen` works interactively;
+2. alpha.14 physical acceptance has every step passed and no unresolved defect;
+3. the generated interface screenshots are visually reviewed;
 4. profile, axis, face and edge bindings write the exact native references expected by the runtime;
 5. end conditions update native preview and geometry without duplicate recomputes;
 6. accept, cancel, restore-session, Undo and Redo remain coherent;
