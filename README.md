@@ -6,40 +6,42 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 
 **Windows x64 is the current product priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
 
-Current source candidate: **0.1.0-alpha.11-workspace-rc**
+Current source candidate: **0.1.0-alpha.12-runtime-preflight-source**
 
-Alpha.11 is deliberately **source only**. It does not publish a portable archive, Setup.exe or executable. It is the final planned interface layer before a separately authorized Windows runtime-validation build.
+Alpha.12 remains deliberately **source only**. It does not publish a portable archive, Setup.exe or executable. It adds the local runtime evidence needed before a separately authorized Windows validation build.
 
-## Alpha.11 workspace release candidate
+## Alpha.12 local runtime preflight
 
-Alpha.11 builds on the alpha.10 native feature bindings and focuses on sustained daily use:
+Alpha.12 adds a **Preflight** page inside the alpha.11 Verification panel. When run inside an existing FreeCAD installation it:
 
-- original quick-access toolbar for New, Open, Save, Undo, Redo and Fit;
-- persistent laptop, standard and wide workspace profiles;
-- persistent compact, normal and comfortable control density;
+- verifies the CommandManager, FeatureManager, task pane, context bar and quick access;
+- verifies the confirmation corner and native-binding panel;
+- records current window dimensions and device pixel ratio;
+- audits essential commands registered by the actual runtime;
+- reviews the active document for basic warnings;
+- captures a real local interface screenshot;
+- creates an isolated native BRep in a temporary document;
+- saves, closes and reopens FCStd and compares volume;
+- exports STEP, imports it into another document and validates the imported shapes;
+- writes a structured local JSON report;
+- leaves all evidence in a temporary folder for review;
+- uploads nothing and creates no executable.
+
+A passing preflight proves only that the automated checks passed in that runtime session. It does not replace interactive Windows use or high-DPI testing.
+
+## Preserved source release candidate
+
+- quick-access toolbar and persistent workspace profiles;
+- compact, normal and comfortable density;
 - system, light and dark visual modes;
-- automatic laptop-layout selection for narrow windows;
-- workspace reset action;
-- Verification tab with document diagnostics;
-- warnings for unsaved documents, invalid BRep and underdefined sketches;
-- command-coverage audit against the actual runtime;
-- safe visible-label rename inside a document transaction;
-- manual physical-release checklist;
-- safe fallback from alpha.11 to alpha.10 and every earlier source shell.
-
-Alpha.11 does not claim that the runtime has passed. It makes the remaining failures visible and creates a controlled gate for physical Windows validation.
-
-## Preserved mechanical workflow
-
+- document diagnostics and command-coverage audit;
 - dedicated PropertyManagers for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch;
 - native selection bindings for compatible profile, axis, face, edge and point properties;
-- end-condition options read from native FreeCAD enumerations;
+- runtime-derived end conditions and debounced recomputation;
 - edit-session awareness and floating confirmation corner;
 - hierarchical FeatureManager and synchronized 3D selection;
-- model, sketch and BRep state feedback;
-- contextual CommandManager switching and `S` shortcut palette;
-- original orientation and display controls;
-- native FCStd, Part Design, Sketcher and OpenCASCADE geometry.
+- native FCStd, Part Design, Sketcher and OpenCASCADE geometry;
+- recovery chain from alpha.12 through every earlier source layer.
 
 Unavailable or incompatible operations remain disabled or are reported as runtime gaps rather than represented as completed functionality.
 
@@ -47,45 +49,57 @@ Unavailable or incompatible operations remain disabled or are reported as runtim
 
 The project adopts established interaction patterns common to professional mechanical CAD so experienced users can work quickly. It does not bundle or copy proprietary SolidWorks source code, icons, logos, trademarks or exact artwork. All SolidFreeCAD visual resources are original.
 
-## Source-RC validation
+## Source-only validation
 
-The workflow `.github/workflows/alpha11-source-validation.yml` performs only:
+The workflow `.github/workflows/alpha12-source-validation.yml` performs only:
 
 - Python syntax compilation;
 - compatibility-chain checks;
-- release-candidate widget and transaction markers;
-- verification that alpha.11 contains no executable, installer or artifact generation.
+- local-preflight contract checks;
+- verification that alpha.12 contains no packaging or artifact upload.
 
 It does not compile FreeCAD or publish a binary.
 
 Manual graphical contract:
 
 ```text
-tests/solidfreecad_alpha11_gui_smoke.py
+tests/solidfreecad_alpha12_gui_smoke.py
 ```
 
-Runtime gate:
+Preflight specification:
 
 ```text
-docs/alpha11-source-rc-gate.md
+docs/alpha12-runtime-preflight.md
 ```
+
+## Evidence produced by the local preflight
+
+Inside a temporary local folder:
+
+```text
+solidfreecad-alpha12-preflight.json
+solidfreecad-alpha12-interface.png
+alpha12-preflight.FCStd
+alpha12-preflight.step
+```
+
+These files are not uploaded automatically.
 
 ## Executable release gate
 
-A user-facing Windows executable remains blocked until physical tests confirm:
+A user-facing Windows executable remains blocked until:
 
-1. `Part → Sketch → Pad → Edit → Pocket → Revolution → Fillet → Chamfer → Save → Reopen` works end to end.
-2. Profile, axis, face and edge bindings write the exact references required by FreeCAD 1.1.1.
-3. End conditions update native preview and geometry without duplicate recomputes.
-4. Accept, cancel, restore-session, Undo and Redo remain coherent.
-5. Tree, selection, Body tip and sketch status remain synchronized.
-6. Layout works at 1366×768, 1920×1080 and high DPI.
-7. Windows scaling works at 100%, 125%, 150% and 200%.
-8. FCStd, STEP and BRep behavior show no regression.
-9. A real interface screenshot and an extended physical Windows session are reviewed.
-10. No blocking or high-severity diagnostic remains.
-
-Only after those gates pass and executable creation is explicitly authorized will portable and installable builds be produced.
+1. Alpha.12 passes inside the intended FreeCAD 1.1.1 Windows runtime.
+2. The generated interface screenshot is visually reviewed.
+3. `Part → Sketch → Pad → Edit → Pocket → Revolution → Fillet → Chamfer → Save → Reopen` works interactively.
+4. Profile, axis, face and edge bindings write the exact native references expected by the runtime.
+5. End conditions update native preview and geometry without duplicate recomputes.
+6. Accept, cancel, restore-session, Undo and Redo remain coherent.
+7. Layout works at 1366×768, 1920×1080 and high DPI.
+8. Windows scaling works at 100%, 125%, 150% and 200%.
+9. FCStd, STEP and BRep regression evidence passes.
+10. An extended physical Windows session reveals no blocking or high-severity defect.
+11. Executable creation is explicitly authorized as a separate step.
 
 ## Repository layout
 
