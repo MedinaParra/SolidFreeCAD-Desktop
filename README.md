@@ -8,7 +8,7 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 
 Current source candidate: **0.1.0-alpha.12-runtime-preflight-source**
 
-Alpha.12 remains deliberately **source only**. It does not publish a portable archive, Setup.exe or executable. It adds the local runtime evidence needed before a separately authorized Windows validation build.
+Alpha.12 remains deliberately **source only**. It does not build or publish a SolidFreeCAD portable archive, Setup.exe or executable. It adds the runtime evidence needed before a separately authorized distribution build.
 
 ## Alpha.12 local runtime preflight
 
@@ -25,9 +25,27 @@ Alpha.12 adds a **Preflight** page inside the alpha.11 Verification panel. When 
 - exports STEP, imports it into another document and validates the imported shapes;
 - writes a structured local JSON report;
 - leaves all evidence in a temporary folder for review;
-- uploads nothing and creates no executable.
+- creates no executable.
 
-A passing preflight proves only that the automated checks passed in that runtime session. It does not replace interactive Windows use or high-DPI testing.
+The local button uploads nothing. A passing preflight proves only that the automated checks passed in that particular runtime session; it does not replace interactive Windows use or high-DPI testing.
+
+## Windows evidence workflow
+
+`.github/workflows/alpha12-windows-preflight-no-package.yml` reuses the previously validated alpha.5 portable runtime only as a temporary test bench. It overlays the current alpha.12 source and runs the GUI and geometry preflight without compiling or packaging SolidFreeCAD.
+
+The job explicitly rejects `.exe`, `.dll`, `.msi` and `.7z` files under its output directory. It may retain only the following review evidence:
+
+```text
+solidfreecad-alpha12-preflight.json
+solidfreecad-alpha12-interface.png
+alpha12-preflight.FCStd
+alpha12-preflight.step
+alpha12-marker.txt
+alpha12-stdout.txt
+alpha12-stderr.txt
+```
+
+The downloaded base runtime is temporary and is not included in the evidence artifact.
 
 ## Preserved source release candidate
 
@@ -56,9 +74,9 @@ The workflow `.github/workflows/alpha12-source-validation.yml` performs only:
 - Python syntax compilation;
 - compatibility-chain checks;
 - local-preflight contract checks;
-- verification that alpha.12 contains no packaging or artifact upload.
+- verification that the source workflow contains no packaging or artifact upload.
 
-It does not compile FreeCAD or publish a binary.
+The separate Windows preflight workflow uploads only the non-executable evidence listed above.
 
 Manual graphical contract:
 
@@ -66,24 +84,17 @@ Manual graphical contract:
 tests/solidfreecad_alpha12_gui_smoke.py
 ```
 
+Automated Windows preflight entry point:
+
+```text
+tests/solidfreecad_alpha12_windows_preflight.py
+```
+
 Preflight specification:
 
 ```text
 docs/alpha12-runtime-preflight.md
 ```
-
-## Evidence produced by the local preflight
-
-Inside a temporary local folder:
-
-```text
-solidfreecad-alpha12-preflight.json
-solidfreecad-alpha12-interface.png
-alpha12-preflight.FCStd
-alpha12-preflight.step
-```
-
-These files are not uploaded automatically.
 
 ## Executable release gate
 
@@ -104,7 +115,7 @@ A user-facing Windows executable remains blocked until:
 ## Repository layout
 
 ```text
-.github/workflows/        Source validation and previous validated build tracks
+.github/workflows/        Source checks, evidence-only preflight and previous build tracks
 docs/                     Architecture, interface gates and integration contracts
 overlay/Mod/SolidFreeCAD/ Shared SolidFreeCAD workbench and GUI overlay
 platform/windows/         Windows packaging notes
