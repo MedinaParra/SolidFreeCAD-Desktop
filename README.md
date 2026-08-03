@@ -6,82 +6,79 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 
 **Windows x64 is the current product priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
 
-Current source prototype: **0.1.0-alpha.8-interaction**
+Current source prototype: **0.1.0-alpha.9-feature-managers**
 
-Alpha.8 remains intentionally **source only**. It does not publish a portable archive, Setup.exe or any executable. Packaging resumes only after the complete mechanical workflow passes physical Windows review.
+Alpha.9 remains intentionally **source only**. It does not publish a portable archive, Setup.exe or any executable. Packaging resumes only after the complete modeling workflow passes physical Windows review.
 
-## Alpha.8 interaction prototype
+## Alpha.9 feature-manager prototype
 
-Alpha.8 builds on the alpha.7 professional shell and adds the interaction layer needed for a mature desktop CAD workflow:
+Alpha.9 builds on the alpha.8 interaction shell and replaces generic editing with more focused mechanical-design guidance:
 
-- automatic detection of sketch and feature edit sessions;
-- floating confirmation corner inside the graphics area;
-- contextual **Operation** tab with accept, close, selection and native parameters;
-- sketch degree-of-freedom feedback when exposed by the FreeCAD runtime;
-- hierarchical design history grouped by parts, bodies, features and references;
-- synchronized tree and 3D selection;
-- visual indication of hidden and invalid objects;
-- contextual CommandManager tab switching;
-- `S` shortcut palette for sketch and feature commands;
-- display modes for shaded with edges, shaded and wireframe;
-- orientation menu for isometric and standard views;
-- adaptive side-panel sizing for desktop and laptop windows;
-- safe fallback to alpha.7 if the interaction layer cannot initialize.
+- dedicated definition profiles for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch;
+- property controls created only when the native FreeCAD object exposes the corresponding property;
+- operation-specific selection instructions and a geometric selection collector;
+- sketch geometry and relation commands inside the contextual panel;
+- sketch fully-defined or remaining-degree-of-freedom feedback;
+- two-column FeatureManager showing design object and state;
+- active Body tip, hidden-object, underdefined-sketch and invalid-BRep states;
+- optional native selection gates for faces, edges, vertices and bodies;
+- original orientation overlay for top, front, right, isometric and fit;
+- safe fallback from alpha.9 to alpha.8 and then to earlier validated shells.
 
-All modeling actions delegate to registered native FreeCAD commands or edit native FreeCAD properties. SolidFreeCAD does not create a parallel CAD document model.
+All modeling actions continue to delegate to registered native FreeCAD commands or edit native FreeCAD properties inside document transactions.
 
-## Preserved alpha.7 and alpha.6 foundation
+## Preserved alpha.8 foundation
 
-- document selector, breadcrumb, command search and model-state feedback;
-- right-side Tasks, Library, Appearances and Resources pane;
-- CommandManager for Operations, Sketch, Surfaces, Evaluate, Shaft, Sheet Metal and Assembly;
-- FeatureManager and PropertyManager foundations;
-- configurations foundation and Heads-Up view toolbar;
-- native FCStd, Part Design, Sketcher and OpenCASCADE geometry;
-- parametric shaft and demonstration component;
-- classic FreeCAD compatibility fallback;
-- previous BRep, FCStd and STEP validation work.
+- edit-session awareness for sketches and features;
+- floating confirmation corner;
+- contextual Operation tab;
+- hierarchical design history and synchronized 3D selection;
+- `S` shortcut palette;
+- display-style and standard-view controls;
+- adaptive desktop/laptop layout;
+- native FCStd, Part Design, Sketcher and OpenCASCADE geometry.
 
 Unavailable commands remain disabled rather than represented as completed features.
 
 ## Original identity and compatibility
 
-The project adopts established interaction patterns common to professional mechanical CAD so experienced users can work quickly. It does not bundle or copy proprietary SolidWorks source code, icons, logos, trademarks or exact artwork. All SolidFreeCAD visual resources are original and the native FreeCAD engine remains visible in the product architecture.
+The project adopts established interaction patterns common to professional mechanical CAD so experienced users can work quickly. It does not bundle or copy proprietary SolidWorks source code, icons, logos, trademarks or exact artwork. All SolidFreeCAD visual resources are original.
 
 ## Source-only validation
 
-The workflow `.github/workflows/alpha8-source-validation.yml` performs only:
+The workflow `.github/workflows/alpha9-source-validation.yml` performs only:
 
 - Python syntax compilation;
-- compatibility-loader checks;
-- verification that alpha.8 contains no installer or portable packaging commands.
+- compatibility-chain checks;
+- verification that alpha.9 contains no installer or portable packaging commands.
 
 It does not compile FreeCAD, upload an artifact or generate an executable.
 
-The manual graphical contract test is:
+Manual graphical contract:
 
 ```text
-tests/solidfreecad_alpha8_gui_smoke.py
+tests/solidfreecad_alpha9_gui_smoke.py
 ```
 
-The maturity criteria and release gate are documented in:
+Maturity criteria and remaining gaps:
 
 ```text
-docs/alpha8-interaction-maturity.md
+docs/alpha9-feature-manager-maturity.md
 ```
 
 ## Executable release gate
 
 A Windows executable remains blocked until physical tests confirm:
 
-1. `Part → Sketch → Pad → Edit → Pocket → Fillet → Save → Reopen` works end to end.
-2. Sketch shortcuts and confirmation controls do not conflict with native tools.
-3. Feature parameters update preview and geometry safely.
-4. Tree hierarchy, selections and multi-document behavior remain synchronized.
-5. Layout works at 1366×768, 1920×1080 and high DPI.
-6. Windows scaling works at 100%, 125%, 150% and 200%.
-7. FCStd, STEP and BRep behavior show no regression.
-8. A real interface screenshot and an extended Windows session are reviewed.
+1. `Part → Sketch → Pad → Edit → Pocket → Revolution → Fillet → Chamfer → Save → Reopen` works end to end.
+2. Dedicated panels update native preview and geometry without duplicate recomputes.
+3. Selection collectors write correct profile, axis, face and edge references.
+4. Accept and cancel restore the correct native transaction state.
+5. Tree, selection, Body tip and sketch status remain synchronized.
+6. Layout works at 1366×768, 1920×1080 and high DPI.
+7. Windows scaling works at 100%, 125%, 150% and 200%.
+8. FCStd, STEP and BRep behavior show no regression.
+9. A real interface screenshot and an extended Windows modeling session are reviewed.
 
 Only after those gates pass will portable and installable builds be created in a separate iteration.
 
