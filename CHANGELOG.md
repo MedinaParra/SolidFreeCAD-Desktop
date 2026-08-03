@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.0-alpha.8-interaction
+
+- Added native edit-session detection for sketches and features.
+- Added a floating confirmation corner in the graphics area.
+- Added a contextual Operation tab with native property editors.
+- Added sketch degree-of-freedom feedback when available.
+- Replaced the flat design list with a hierarchical native-object tree.
+- Added synchronized FeatureManager and 3D selection.
+- Added hidden-object and invalid-BRep visual feedback.
+- Added context-aware CommandManager tab switching.
+- Added the `S` shortcut palette for sketch and feature commands.
+- Added shaded-with-edges, shaded and wireframe controls.
+- Added standard orientation controls and adaptive dock sizing.
+- Added a safe alpha.7 recovery loader.
+- Added a manual alpha.8 GUI contract test and source-only validation workflow.
+- Did not compile, package or publish any Windows executable.
+
 ## 0.1.0-alpha.7-interface
 
 - Added a source-only professional mechanical-CAD interface layer.
