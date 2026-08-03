@@ -1,10 +1,10 @@
-# SolidFreeCAD alpha.12 local runtime preflight
+# SolidFreeCAD alpha.12 runtime preflight
 
 ## Purpose
 
-Alpha.12 is the last source-only iteration before considering a disposable Windows validation build. It adds a local preflight that runs inside an existing FreeCAD installation and records evidence without creating or publishing a SolidFreeCAD executable.
+Alpha.12 is the last source-only iteration before considering a user-facing Windows build. It adds a local preflight and an evidence-only Windows CI path without compiling or publishing a SolidFreeCAD executable.
 
-## Preflight checks
+## Local preflight checks
 
 ### Interface contract
 
@@ -48,16 +48,32 @@ In a temporary folder and temporary documents, the preflight:
 8. validates imported shapes;
 9. closes all temporary documents.
 
-### Evidence
+### Local evidence
 
-The preflight stores locally:
+The local preflight stores:
 
 - `solidfreecad-alpha12-preflight.json`;
 - `solidfreecad-alpha12-interface.png`;
 - the temporary FCStd fixture;
 - the temporary STEP fixture.
 
-Nothing is uploaded automatically.
+The local button uploads nothing.
+
+## Windows CI evidence path
+
+`.github/workflows/alpha12-windows-preflight-no-package.yml` downloads the previously validated alpha.5 portable runtime into the Windows runner as a temporary test bench. It does not rebuild or redistribute that runtime.
+
+The workflow:
+
+1. syntax-checks the alpha.12 source;
+2. expands the existing runtime under the runner temporary directory;
+3. overlays the alpha.12 workbench source;
+4. launches FreeCAD with `tests/solidfreecad_alpha12_windows_preflight.py`;
+5. executes the same interface, command and geometry checks;
+6. rejects `.exe`, `.dll`, `.msi` and `.7z` files from the output directory;
+7. may upload only PNG, JSON, FCStd, STEP, marker and text logs as review evidence.
+
+The artifact does not include the downloaded FreeCAD runtime or a SolidFreeCAD distribution.
 
 ## Interpretation
 
@@ -67,13 +83,13 @@ Nothing is uploaded automatically.
 - correct interactive selection for every feature;
 - native task-dialog cancel behavior;
 - long-session stability;
-- equivalence to another commercial CAD interface.
+- exact equivalence to another commercial CAD product.
 
 ## Gate before any executable
 
-The next step may be a disposable internal Windows validation runtime only when explicitly authorized. Before a user-facing portable or installer:
+Before a user-facing portable or installer:
 
-- alpha.12 must pass in the intended FreeCAD 1.1.1 Windows runtime;
+- the Windows alpha.12 preflight must pass;
 - the generated screenshot must be visually reviewed;
 - the complete interactive modeling flow must be performed manually;
 - LinkSub bindings must be inspected in saved FCStd documents;
