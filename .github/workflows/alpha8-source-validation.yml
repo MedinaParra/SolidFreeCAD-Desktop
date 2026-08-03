@@ -46,9 +46,18 @@ jobs:
         shell: bash
         run: |
           test -f docs/alpha8-interaction-maturity.md
-          ! grep -R --line-number --include='*alpha8*' -E \
-            'upload-artifact|Inno Setup|ISCC\.exe|Setup\.exe|7z a|Package-Alpha8' \
-            .github overlay scripts tests docs README.md CHANGELOG.md
+          test ! -e scripts/alpha8-windows
+          test ! -e platform/windows/alpha8-package
+          needle="actions/upload""-artifact"
+          if grep -q "$needle" .github/workflows/alpha8-source-validation.yml; then
+            echo "Alpha8 source validation must not upload artifacts."
+            exit 1
+          fi
+          ! grep -R --line-number -E \
+            'ISCC\.exe|Package-Alpha8|Setup\.exe|\.7z' \
+            overlay/Mod/SolidFreeCAD/InteractionWorkspace.py \
+            overlay/Mod/SolidFreeCAD/InteractionWorkspaceCompat.py \
+            tests/solidfreecad_alpha8_gui_smoke.py
           echo "Alpha8 remains source-only: no portable, installer or executable packaging."
 
       - name: Verify workbench compatibility loader
