@@ -5,16 +5,21 @@ import FreeCAD as App
 import Part
 
 
+FEATURE_KIND = "Alpha6DemoPlate"
+
+
 class DemoPlateProxy:
     """Build a plate with a through-hole and a rectangular pocket."""
 
     def __init__(self, obj):
-        obj.Proxy = self
         self._ensure_properties(obj)
+        obj.Proxy = self
 
     @staticmethod
     def _ensure_properties(obj):
         definitions = (
+            ("App::PropertyString", "SolidFreeCADFeature", "SolidFreeCAD", "Internal feature identifier"),
+            ("App::PropertyLink", "DesignBody", "SolidFreeCAD", "Associated Part Design Body"),
             ("App::PropertyLength", "Length", "Dimensions", "Overall plate length"),
             ("App::PropertyLength", "Width", "Dimensions", "Overall plate width"),
             ("App::PropertyLength", "Thickness", "Dimensions", "Plate thickness"),
@@ -25,9 +30,11 @@ class DemoPlateProxy:
             ("App::PropertyString", "ValidationStatus", "Validation", "Last geometry validation result"),
         )
         for type_name, name, group, description in definitions:
-            if not hasattr(obj, name):
+            if name not in obj.PropertiesList:
                 obj.addProperty(type_name, name, group, description)
 
+        obj.SolidFreeCADFeature = FEATURE_KIND
+        obj.setEditorMode("SolidFreeCADFeature", 1)
         defaults = {
             "Length": 120.0,
             "Width": 80.0,
@@ -40,7 +47,8 @@ class DemoPlateProxy:
         for name, value in defaults.items():
             if float(getattr(obj, name)) <= 0.0:
                 setattr(obj, name, value)
-        obj.ValidationStatus = "Pending recompute"
+        if not obj.ValidationStatus:
+            obj.ValidationStatus = "Pending recompute"
 
     def execute(self, obj):
         length = max(float(obj.Length), 10.0)
@@ -67,18 +75,18 @@ class DemoPlateProxy:
             pocket_depth + 1.0,
             App.Vector(pocket_x, pocket_y, thickness - pocket_depth),
         )
-        shape = shape.cut(pocket)
-        shape = shape.removeSplitter()
+        shape = shape.cut(pocket).removeSplitter()
 
         obj.Shape = shape
         obj.ValidationStatus = "Valid BRep" if shape.isValid() and not shape.isNull() else "Invalid BRep"
 
     def onDocumentRestored(self, obj):
         self._ensure_properties(obj)
+        obj.Proxy = self
 
 
 def create_demo_part(document=None):
-    """Create a native FCStd document/body containing the parametric demo feature."""
+    """Create a native FCStd document, Body and persistent parametric feature."""
     doc = document or App.ActiveDocument or App.newDocument("SolidFreeCADAlpha6Demo")
     body = doc.getObject("Body")
     if body is None:
@@ -87,11 +95,16 @@ def create_demo_part(document=None):
 
     feature = doc.getObject("Alpha6DemoPlate")
     if feature is None:
-        feature = body.newObject("PartDesign::FeaturePython", "Alpha6DemoPlate")
+        # Part::FeaturePython is the persistence pattern already validated by the
+        # SolidFreeCAD shaft feature. The native Body remains available for the
+        # sketch/Part Design workflow and is explicitly linked to this feature.
+        feature = doc.addObject("Part::FeaturePython", "Alpha6DemoPlate")
         feature.Label = "Placa paramétrica alpha.6"
         DemoPlateProxy(feature)
+        feature.DesignBody = body
     elif not isinstance(getattr(feature, "Proxy", None), DemoPlateProxy):
         DemoPlateProxy(feature)
+        feature.DesignBody = body
 
     doc.recompute()
     return feature
