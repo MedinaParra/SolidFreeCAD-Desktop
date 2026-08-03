@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.11-workspace-rc
+
+- Added original quick-access toolbar for essential document and view actions.
+- Added persistent laptop, standard and wide workspace profiles.
+- Added persistent UI density and system/light/dark modes.
+- Added automatic narrow-window adaptation and workspace reset.
+- Added document diagnostics for unsaved files, invalid BRep and underdefined sketches.
+- Added runtime command-coverage auditing.
+- Added safe visible-label rename through a document transaction.
+- Added a manual physical-release checklist and source-RC gate.
+- Added alpha.11 fallback to alpha.10.
+- Did not compile, package or publish any Windows executable.
+
 ## 0.1.0-alpha.10-native-bindings
 
 - Added safe native Link, LinkList, LinkSub and LinkSubList detection.
