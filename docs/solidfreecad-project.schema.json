@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solidfreecad.local/schemas/solidfreecad-project-v1.json",
+  "title": "SolidFreeCAD project metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "source",
+    "createdAt",
+    "modifiedAt",
+    "geometryConfidence",
+    "validationStatus",
+    "fcstdFile"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "projectId": {"type": "string", "minLength": 1},
+    "workOrderId": {"type": ["string", "null"]},
+    "assetId": {"type": ["string", "null"]},
+    "source": {
+      "type": "string",
+      "enum": ["manual-cad", "android-photogrammetry", "step-import", "fcstd-import", "other"]
+    },
+    "sourceDevice": {"type": ["string", "null"]},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "modifiedAt": {"type": "string", "format": "date-time"},
+    "operator": {"type": ["string", "null"]},
+    "geometryConfidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "validationStatus": {
+      "type": "string",
+      "enum": ["unverified", "operator-reviewed", "engineering-reviewed", "rejected"]
+    },
+    "fcstdFile": {"type": "string", "minLength": 1},
+    "stepFile": {"type": ["string", "null"]},
+    "sourceImages": {"type": "array", "items": {"type": "string"}},
+    "notes": {"type": "string"},
+    "corrections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["timestamp", "field", "previousValue", "newValue"],
+        "properties": {
+          "timestamp": {"type": "string", "format": "date-time"},
+          "field": {"type": "string"},
+          "previousValue": {},
+          "newValue": {},
+          "operator": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}
