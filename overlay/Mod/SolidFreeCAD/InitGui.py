@@ -21,7 +21,7 @@ def _available(command_names):
 
 def _apply_window_branding():
     main_window = Gui.getMainWindow()
-    main_window.setWindowTitle("SolidFreeCAD Desktop")
+    main_window.setWindowTitle("SolidFreeCAD Desktop alpha.6")
     main_window.setWindowIcon(QtGui.QIcon(_ICON_PATH))
     status_label = main_window.findChild(QtWidgets.QLabel, "SolidFreeCADStatusBrand")
     if status_label is None:
@@ -33,7 +33,7 @@ def _apply_window_branding():
 
 class SolidFreeCADWorkbench(Gui.Workbench):
     MenuText = "SolidFreeCAD"
-    ToolTip = "Diseño mecánico paramétrico con flujo clásico"
+    ToolTip = "Diseño mecánico paramétrico con flujo integrado"
     Icon = _ICON_PATH
 
     def Initialize(self):
@@ -51,10 +51,13 @@ class SolidFreeCADWorkbench(Gui.Workbench):
             pass
 
         from SolidFreeCAD.ClassicIcons import ensure_icon_pack
+
         ensure_icon_pack()
         from SolidFreeCAD import Commands  # noqa: F401
 
-        file_commands = _available(["SFC_CreatePart", "SFC_Open", "SFC_Save", "Std_Undo", "Std_Redo"])
+        file_commands = _available([
+            "SFC_CreatePart", "SFC_CreateDemoPart", "SFC_Open", "SFC_Save", "Std_Undo", "Std_Redo"
+        ])
         workflow_commands = _available([
             "SFC_NewSketch", "SFC_Pad", "SFC_Pocket", "SFC_Revolution",
             "SFC_Fillet", "SFC_Chamfer", "SFC_CreateShaft", "SFC_ShowShaftPanel",
@@ -65,7 +68,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
             self.appendMenu("SolidFreeCAD", workflow_commands)
 
     def Activated(self):
-        from SolidFreeCAD.ClassicWorkspace import show_workspace
+        from SolidFreeCAD.MechanicalWorkspace import show_workspace
 
         _apply_window_branding()
         general = App.ParamGet("User parameter:BaseApp/Preferences/General")
@@ -74,7 +77,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
         show_workspace()
 
     def Deactivated(self):
-        from SolidFreeCAD.ClassicWorkspace import hide_workspace
+        from SolidFreeCAD.MechanicalWorkspace import hide_workspace
 
         hide_workspace()
 
