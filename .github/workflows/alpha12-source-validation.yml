@@ -1,0 +1,74 @@
+name: Alpha12 runtime-preflight source validation
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha12-runtime-preflight-source"
+    paths:
+      - ".github/workflows/alpha12-source-validation.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha12_gui_smoke.py"
+      - "docs/alpha12-runtime-preflight.md"
+      - "README.md"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha12-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Validate alpha12 preflight source and no-package boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile alpha12 Python sources
+        run: |
+          python -m py_compile \
+            overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py \
+            overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspaceCompat.py \
+            overlay/Mod/SolidFreeCAD/WorkspaceRC.py \
+            overlay/Mod/SolidFreeCAD/Workbench.py \
+            tests/solidfreecad_alpha12_gui_smoke.py
+
+      - name: Verify compatibility chain
+        run: |
+          grep -q 'RuntimePreflightWorkspaceCompat' overlay/Mod/SolidFreeCAD/Workbench.py
+          grep -q 'WorkspaceRCCompat' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspaceCompat.py
+
+      - name: Verify local preflight contract
+        run: |
+          grep -q 'solidfreecad-alpha12-preflight.json' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
+          grep -q 'solidfreecad-alpha12-interface.png' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
+          grep -q 'Part.export' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
+          grep -q 'App.openDocument' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
+          grep -q 'Part.insert' overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py
+          test -f docs/alpha12-runtime-preflight.md
+
+      - name: Verify alpha12 remains source-only
+        shell: bash
+        run: |
+          test ! -e scripts/alpha12-windows
+          test ! -e platform/windows/alpha12-package
+          needle="actions/upload""-artifact"
+          if grep -q "$needle" .github/workflows/alpha12-source-validation.yml; then
+            echo "Alpha12 source validation must not upload artifacts."
+            exit 1
+          fi
+          ! grep -R --line-number -E \
+            'ISCC\.exe|Package-Alpha12|Setup\.exe|\.7z' \
+            overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py \
+            overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspaceCompat.py \
+            tests/solidfreecad_alpha12_gui_smoke.py
