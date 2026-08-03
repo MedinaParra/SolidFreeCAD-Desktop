@@ -8,6 +8,7 @@ import FreeCADGui as Gui
 from PySide import QtWidgets
 
 from SolidFreeCAD.ClassicIcons import ensure_icon_pack
+from SolidFreeCAD.DemoPartFeature import create_demo_part
 from SolidFreeCAD.ShaftFeature import create_shaft
 
 _MODULE_DIR = os.path.dirname(__file__)
@@ -30,15 +31,31 @@ def _native_available(command_name: str) -> bool:
     return command_name in set(Gui.listCommands())
 
 
-def _refresh_classic_command_buttons():
-    """Refresh buttons that were initially disabled before a document existed."""
+def _refresh_command_buttons():
+    """Refresh buttons that may have been disabled before a document existed."""
     manager = Gui.getMainWindow().findChild(
         QtWidgets.QDockWidget, "SolidFreeCADClassicCommandManager"
     )
     if manager is None:
         return
     for button in manager.findChildren(QtWidgets.QToolButton):
-        button.setEnabled(True)
+        command_available = button.property("sfcCommandAvailable")
+        if command_available is not None:
+            button.setEnabled(bool(command_available))
+        elif App.ActiveDocument is not None:
+            button.setEnabled(True)
+
+
+def _show_alpha6_manager(mode: str):
+    try:
+        from SolidFreeCAD.MechanicalWorkspace import show_feature_manager
+
+        manager = show_feature_manager()
+        manager.set_mode(mode)
+        manager.refresh_tree(force=True)
+        manager.refresh_selection()
+    except Exception as exc:
+        App.Console.PrintMessage(f"SolidFreeCAD: manager refresh skipped: {exc}\n")
 
 
 class NativeCommand:
@@ -96,14 +113,31 @@ class CreatePartCommand:
         Gui.activeDocument().activeView().viewAxonometric()
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(body)
-        _refresh_classic_command_buttons()
-        try:
-            from SolidFreeCAD.ClassicWorkspace import show_property_manager
-            manager = show_property_manager()
-            manager.set_mode("part")
-            manager.refresh_selection()
-        except Exception:
-            pass
+        _refresh_command_buttons()
+        _show_alpha6_manager("part")
+
+
+class CreateDemoPartCommand:
+    """Create a validated parametric part used by alpha.6 onboarding and CI."""
+
+    def GetResources(self):
+        return {
+            "Pixmap": _icon("operaciones", "agujero.svg"),
+            "MenuText": "Pieza demostrativa alpha.6",
+            "ToolTip": "Crea una placa paramétrica con agujero y bolsillo para probar el flujo completo.",
+        }
+
+    def IsActive(self):
+        return True
+
+    def Activated(self):
+        feature = create_demo_part()
+        Gui.activeDocument().activeView().viewAxonometric()
+        Gui.activeDocument().activeView().fitAll()
+        Gui.Selection.clearSelection()
+        Gui.Selection.addSelection(feature)
+        _refresh_command_buttons()
+        _show_alpha6_manager("part")
 
 
 class CreateShaftCommand:
@@ -125,15 +159,9 @@ class CreateShaftCommand:
         Gui.activeDocument().activeView().fitAll()
         Gui.Selection.clearSelection()
         Gui.Selection.addSelection(obj)
-        _refresh_classic_command_buttons()
+        _refresh_command_buttons()
         show_panel()
-        try:
-            from SolidFreeCAD.ClassicWorkspace import show_property_manager
-            manager = show_property_manager()
-            manager.set_mode("shaft")
-            manager.refresh_selection()
-        except Exception:
-            pass
+        _show_alpha6_manager("shaft")
 
 
 class ShowShaftPanelCommand:
@@ -149,7 +177,9 @@ class ShowShaftPanelCommand:
 
     def Activated(self):
         from SolidFreeCAD.PropertyPanel import show_panel
+
         show_panel()
+        _show_alpha6_manager("shaft")
 
 
 class FitAndAxonometricCommand:
@@ -170,6 +200,7 @@ class FitAndAxonometricCommand:
 
 
 Gui.addCommand("SFC_CreatePart", CreatePartCommand())
+Gui.addCommand("SFC_CreateDemoPart", CreateDemoPartCommand())
 Gui.addCommand("SFC_CreateShaft", CreateShaftCommand())
 Gui.addCommand("SFC_ShowShaftPanel", ShowShaftPanelCommand())
 Gui.addCommand("SFC_FitAxonometric", FitAndAxonometricCommand())
