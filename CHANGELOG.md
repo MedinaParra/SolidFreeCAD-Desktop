@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-alpha.10-native-bindings
+
+- Added safe native Link, LinkList, LinkSub and LinkSubList detection.
+- Added role-specific capture for profiles, axes, limiting faces, edges and points.
+- Added runtime-derived end-condition enumerations.
+- Added debounced preview recomputation.
+- Added conservative feature-session snapshots and explicit restore.
+- Added operation readiness feedback for missing inputs.
+- Added alpha.10 fallback to alpha.9.
+- Added manual GUI contract and source-only validation.
+- Did not compile, package or publish any Windows executable.
+
 ## 0.1.0-alpha.9-feature-managers
 
 - Added dedicated profiles for Pad, Pocket, Revolution, Fillet, Chamfer, Hole and Sketch.
