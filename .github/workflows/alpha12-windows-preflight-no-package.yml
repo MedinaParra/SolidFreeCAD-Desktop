@@ -1,0 +1,176 @@
+name: Alpha12 Windows preflight evidence only
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha12-runtime-preflight-source"
+    paths:
+      - ".github/workflows/alpha12-windows-preflight-no-package.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha12_windows_preflight.py"
+      - "docs/alpha12-runtime-preflight.md"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha12-windows-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BASE_RUNTIME_RUN_ID: "30220398037"
+  BASE_RUNTIME_ARTIFACT: "SolidFreeCAD-0.1.0-alpha.5-Windows-x64-Portable"
+
+jobs:
+  windows-preflight:
+    name: Run alpha12 on existing Windows runtime without packaging
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout source candidate
+        uses: actions/checkout@v4
+
+      - name: Validate source syntax
+        shell: pwsh
+        run: |
+          $files = @(
+            "overlay/Mod/SolidFreeCAD/FeatureBindingWorkspace.py",
+            "overlay/Mod/SolidFreeCAD/WorkspaceRC.py",
+            "overlay/Mod/SolidFreeCAD/RuntimePreflightWorkspace.py",
+            "overlay/Mod/SolidFreeCAD/Workbench.py",
+            "tests/solidfreecad_alpha12_windows_preflight.py"
+          )
+          foreach ($file in $files) {
+            python -m py_compile $file
+            if ($LASTEXITCODE -ne 0) { throw "Python syntax validation failed: $file" }
+          }
+
+      - name: Download previously validated portable runtime
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+        with:
+          name: ${{ env.BASE_RUNTIME_ARTIFACT }}
+          path: base-runtime-artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.BASE_RUNTIME_RUN_ID }}
+
+      - name: Expand existing runtime
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -LiteralPath "base-runtime-artifact" -Filter "*.7z" -File | Select-Object -First 1
+          if (-not $archive) { throw "The validated runtime artifact contains no portable archive." }
+          $runtime = Join-Path $env:RUNNER_TEMP "SolidFreeCAD-alpha12-preflight-runtime"
+          New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+          & 7z x $archive.FullName "-o$runtime" -y
+          if ($LASTEXITCODE -ne 0) { throw "Unable to extract the validated runtime." }
+          $freecad = Join-Path $runtime "Library/bin/FreeCAD.exe"
+          if (-not (Test-Path -LiteralPath $freecad)) { throw "Existing runtime is missing FreeCAD.exe." }
+          Remove-Item -LiteralPath "base-runtime-artifact" -Recurse -Force
+          "SOLIDFREECAD_RUNTIME=$runtime" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install alpha12 overlay into temporary runtime
+        shell: pwsh
+        run: |
+          $source = Resolve-Path "overlay/Mod/SolidFreeCAD"
+          $destination = Join-Path $env:SOLIDFREECAD_RUNTIME "Library/Mod/SolidFreeCAD"
+          if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Recurse -Force }
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          Copy-Item -Path (Join-Path $source "*") -Destination $destination -Recurse -Force
+          foreach ($required in @(
+            "RuntimePreflightWorkspace.py",
+            "RuntimePreflightWorkspaceCompat.py",
+            "WorkspaceRC.py",
+            "FeatureBindingWorkspace.py",
+            "Workbench.py",
+            "InitGui.py"
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $destination $required))) {
+              throw "Alpha12 overlay is missing $required."
+            }
+          }
+
+      - name: Run GUI and geometry preflight
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "dist/alpha12-preflight" -Force | Out-Null
+          $runtime = $env:SOLIDFREECAD_RUNTIME
+          $freecad = Join-Path $runtime "Library/bin/FreeCAD.exe"
+          $marker = Join-Path (Resolve-Path "dist/alpha12-preflight") "alpha12-marker.txt"
+          $output = (Resolve-Path "dist/alpha12-preflight").Path
+          $stdout = Join-Path $output "alpha12-stdout.txt"
+          $stderr = Join-Path $output "alpha12-stderr.txt"
+          $script = (Resolve-Path "tests/solidfreecad_alpha12_windows_preflight.py").Path
+          $previousPath = $env:PATH
+          $previousPythonHome = $env:PYTHONHOME
+          try {
+            $env:PATH = "$(Join-Path $runtime 'Library/bin');$(Join-Path $runtime 'Library/usr/bin');$runtime;$(Join-Path $runtime 'Scripts');$previousPath"
+            $env:PYTHONHOME = $runtime
+            $env:FREECAD_USER_HOME = Join-Path $runtime "UserData-alpha12"
+            $env:FREECAD_USER_DATA = Join-Path $runtime "UserData-alpha12"
+            $env:QT_PLUGIN_PATH = Join-Path $runtime "Library/plugins"
+            $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $runtime "Library/plugins/platforms"
+            $env:QT_QPA_PLATFORM = "windows"
+            $env:QT_OPENGL = "software"
+            $env:SOLIDFREECAD_ALPHA12_MARKER = $marker
+            $env:SOLIDFREECAD_ALPHA12_OUTPUT = $output
+            New-Item -ItemType Directory -Path $env:FREECAD_USER_HOME -Force | Out-Null
+
+            $arguments = @($script)
+            $process = Start-Process -FilePath $freecad -ArgumentList $arguments -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+            $deadline = (Get-Date).AddSeconds(150)
+            while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Seconds 2
+              $process.Refresh()
+            }
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              throw "Alpha12 preflight timed out."
+            }
+            if (-not (Test-Path -LiteralPath $marker)) {
+              throw "Alpha12 preflight did not create a marker. Exit code: $($process.ExitCode)."
+            }
+            $markerText = Get-Content -LiteralPath $marker -Raw
+            Write-Host $markerText
+            $reportPath = Join-Path $output "solidfreecad-alpha12-preflight.json"
+            if (-not (Test-Path -LiteralPath $reportPath)) { throw "Alpha12 JSON report was not created." }
+            $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+            "### SolidFreeCAD alpha.12 Windows preflight" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "- Checks: $($report.summary.checks)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "- Blocking failures: $($report.summary.blocking_failures)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "- Warnings: $($report.summary.warnings)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            if ($markerText -notmatch "^PASS") { throw "Alpha12 Windows preflight reported a blocking failure." }
+          }
+          finally {
+            $env:PATH = $previousPath
+            $env:PYTHONHOME = $previousPythonHome
+          }
+
+      - name: Reject executable distribution outputs
+        if: always()
+        shell: pwsh
+        run: |
+          $forbidden = Get-ChildItem -LiteralPath "dist" -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in @(".exe", ".dll", ".msi", ".7z") }
+          if ($forbidden) {
+            $forbidden | ForEach-Object { Write-Error "Forbidden distribution output: $($_.FullName)" }
+            throw "The preflight job produced a binary distribution output."
+          }
+
+      - name: Upload non-executable preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha12-Windows-Preflight-Evidence
+          path: |
+            dist/alpha12-preflight/solidfreecad-alpha12-preflight.json
+            dist/alpha12-preflight/solidfreecad-alpha12-interface.png
+            dist/alpha12-preflight/alpha12-preflight.FCStd
+            dist/alpha12-preflight/alpha12-preflight.step
+            dist/alpha12-preflight/alpha12-marker.txt
+            dist/alpha12-preflight/alpha12-stdout.txt
+            dist/alpha12-preflight/alpha12-stderr.txt
+          if-no-files-found: warn
+          retention-days: 14
