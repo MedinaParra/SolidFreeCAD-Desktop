@@ -2,88 +2,69 @@
 
 SolidFreeCAD Desktop is a mechanical-design interface built on the official FreeCAD engine. It preserves native FCStd documents, OpenCASCADE geometry, Part Design, Sketcher, TechDraw, FEM, Python and the classic FreeCAD interface while presenting a more integrated task-oriented workflow.
 
-## Current release track
+## Current development track
 
-**Windows x64 is the current delivery priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
+**Windows x64 is the current product priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
 
-Current development version: **0.1.0-alpha.6**
+Current source prototype: **0.1.0-alpha.7-interface**
 
-## Alpha.6 interface
+Alpha.7 is intentionally **source only**. This branch does not add, trigger or publish a portable build, Setup.exe or other executable. Packaging will resume only after the interface reaches its physical Windows acceptance gate.
 
-The alpha.6 workspace introduces a familiar mechanical-CAD structure using original SolidFreeCAD code and artwork:
+## Alpha.7 interface prototype
+
+Alpha.7 builds on the validated alpha.6 mechanical workspace and adds:
+
+- document context bar with active-document selector;
+- document/object breadcrumb and model-state feedback;
+- curated command search with `Ctrl+K`;
+- explicit recompute control;
+- right-side task pane with Tasks, Library, Appearances and Resources;
+- selection-aware native-property editor for common numeric parameters;
+- quick edit, visibility, zoom and recompute actions;
+- design library that delegates to registered FreeCAD commands;
+- native shape color and transparency controls;
+- safer context actions in the FeatureManager tree;
+- original SolidFreeCAD styling and resources only.
+
+The project adopts interaction patterns common to professional mechanical CAD, but it does not bundle proprietary SolidWorks code, icons, trademarks or exact artwork.
+
+## Preserved alpha.6 foundation
 
 - tabbed CommandManager for Operations, Sketch, Surfaces, Evaluate, Shaft, Sheet Metal and Assembly;
 - integrated FeatureManager design tree;
 - contextual PropertyManager with accept/cancel controls and guided messages;
 - configurations foundation;
 - compact Heads-Up view toolbar;
-- native FreeCAD commands and FCStd documents underneath the new interface;
-- classic FreeCAD UI retained as a compatibility fallback.
+- native FreeCAD commands and FCStd documents;
+- classic FreeCAD UI retained as a compatibility fallback;
+- parametric shaft and demonstration part;
+- BRep, FCStd and STEP validation from the previous Windows track.
 
-The project may adopt established interaction patterns common to professional mechanical CAD, but it does not bundle proprietary SolidWorks code, icons, trademarks or artwork.
+Unavailable commands remain disabled rather than represented as completed features.
 
-## Functional and validated
+## Source-only validation
 
-- Windows Qt runtime repair and `qwindows.dll` packaging;
-- isolated portable configuration;
-- branded launcher, portable package and Inno Setup installer;
-- native document and Part Design Body creation;
-- native FreeCAD command delegation for sketches and features;
-- editable parametric shaft with optional keyway;
-- parametric alpha.6 demonstration plate with through-hole and pocket;
-- BRep validation;
-- FCStd save, close and reopen validation;
-- STEP export validation;
-- automated GUI structure test and Windows interface screenshot;
-- original SVG icon pack.
+The manual test `tests/solidfreecad_alpha7_gui_smoke.py` checks the alpha.7 widget contract inside a validated FreeCAD runtime. It is deliberately not connected to a packaging workflow.
 
-## Experimental
+The design and future release gate are documented in:
 
-- sheet-metal commands depend on an installed compatible SheetMetal workbench;
-- assembly commands depend on the assembly commands available in the pinned FreeCAD runtime;
-- some advanced surface and evaluation commands vary by FreeCAD build;
-- the interface still requires physical review on Windows for spacing, DPI scaling and long editing sessions.
+```text
+docs/alpha7-interface-blueprint.md
+```
 
-Unavailable commands are disabled rather than represented as working features.
+A future executable is allowed only after physical Windows review confirms DPI scaling, layout stability, shortcut safety, multi-document behavior, property editing and no regression in native geometry or files.
 
 ## Repository layout
 
 ```text
-.github/workflows/        Windows CI and release validation
-docs/                     Architecture, visual system and integration contracts
+.github/workflows/        Existing validated alpha.6 build workflows
+docs/                     Architecture, interface gates and integration contracts
 overlay/Mod/SolidFreeCAD/ Shared SolidFreeCAD workbench and GUI overlay
 platform/windows/         Windows packaging notes
 platform/ubuntu/          Preserved Ubuntu target
-scripts/windows/          Windows build and packaging scripts
+scripts/windows/          Existing Windows build and packaging scripts
 tests/                    Headless and graphical validation
 ```
-
-## Windows alpha.6 validation flow
-
-The workflow `.github/workflows/windows-alpha6-solidworks-workflow.yml`:
-
-1. reuses the validated alpha.5 Windows runtime;
-2. installs the alpha.6 overlay;
-3. validates Python, SVG and JSON contracts;
-4. creates and edits a parametric part;
-5. validates its BRep;
-6. saves and reopens FCStd;
-7. exports STEP;
-8. validates the GUI structure;
-9. captures a Windows screenshot;
-10. generates portable and Setup.exe artifacts with SHA-256 files.
-
-## Application-mother integration
-
-The project contract under `docs/solidfreecad-project.schema.json` prepares future links with:
-
-- Android photogrammetry and reconstructed geometry;
-- work orders and asset identity;
-- geometry confidence and validation status;
-- FCStd/STEP exchange;
-- source images and operator corrections.
-
-No cloud dependency is required by this contract.
 
 ## Foundation
 
