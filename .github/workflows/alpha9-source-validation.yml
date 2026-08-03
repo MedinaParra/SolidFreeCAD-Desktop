@@ -1,0 +1,66 @@
+name: Alpha9 source-only feature-manager validation
+
+on:
+  push:
+    branches:
+      - "agent/windows-alpha9-feature-managers"
+    paths:
+      - ".github/workflows/alpha9-source-validation.yml"
+      - "overlay/Mod/SolidFreeCAD/**"
+      - "tests/solidfreecad_alpha9_gui_smoke.py"
+      - "docs/alpha9-feature-manager-maturity.md"
+      - "README.md"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidfreecad-alpha9-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-contract:
+    name: Validate alpha9 Python and source-only boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile alpha9 Python sources
+        run: |
+          python -m py_compile \
+            overlay/Mod/SolidFreeCAD/FeatureManagerWorkspace.py \
+            overlay/Mod/SolidFreeCAD/FeatureManagerWorkspaceCompat.py \
+            overlay/Mod/SolidFreeCAD/InteractionWorkspace.py \
+            overlay/Mod/SolidFreeCAD/Workbench.py \
+            tests/solidfreecad_alpha9_gui_smoke.py
+
+      - name: Verify alpha9 source-only boundary
+        shell: bash
+        run: |
+          test -f docs/alpha9-feature-manager-maturity.md
+          test ! -e scripts/alpha9-windows
+          test ! -e platform/windows/alpha9-package
+          needle="actions/upload""-artifact"
+          if grep -q "$needle" .github/workflows/alpha9-source-validation.yml; then
+            echo "Alpha9 source validation must not upload artifacts."
+            exit 1
+          fi
+          ! grep -R --line-number -E \
+            'ISCC\.exe|Package-Alpha9|Setup\.exe|\.7z' \
+            overlay/Mod/SolidFreeCAD/FeatureManagerWorkspace.py \
+            overlay/Mod/SolidFreeCAD/FeatureManagerWorkspaceCompat.py \
+            tests/solidfreecad_alpha9_gui_smoke.py
+
+      - name: Verify compatibility chain
+        run: |
+          grep -q 'FeatureManagerWorkspaceCompat' overlay/Mod/SolidFreeCAD/Workbench.py
+          grep -q 'InteractionWorkspaceCompat' overlay/Mod/SolidFreeCAD/FeatureManagerWorkspaceCompat.py
