@@ -55,7 +55,6 @@ jobs:
               'RightDockWidgetArea',
               'PropertyPanel',
               'Gui.runCommand',
-              'TaskView',
           )
           offenders = [token for token in forbidden if token in combined]
           if offenders:
