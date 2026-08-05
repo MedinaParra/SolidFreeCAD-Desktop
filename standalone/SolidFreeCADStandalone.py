@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Entry point for the SolidFreeCAD alpha.8 standalone shell."""
+"""Entry point for the SolidFreeCAD alpha.9 standalone shell."""
 from __future__ import annotations
 
 import os

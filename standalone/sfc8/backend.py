@@ -1,4 +1,4 @@
-"""FreeCAD document and geometry backend for the alpha.8 shell."""
+"""FreeCAD document and geometry backend for the alpha.9 shell."""
 from __future__ import annotations
 
 import os
@@ -11,6 +11,50 @@ import Sketcher
 
 def active_document():
     return App.ActiveDocument
+
+
+def object_by_name(name):
+    doc = active_document()
+    return doc.getObject(name) if doc is not None and name else None
+
+
+def selected_object():
+    selected = Gui.Selection.getSelection()
+    return selected[0] if selected else None
+
+
+def select_object(name):
+    obj = object_by_name(name)
+    Gui.Selection.clearSelection()
+    if obj is not None:
+        Gui.Selection.addSelection(obj)
+    return obj
+
+
+def set_object_label(name, label):
+    obj = object_by_name(name)
+    if obj is not None and label:
+        obj.Label = label
+        obj.Document.recompute()
+    return obj
+
+
+def set_object_visibility(name, visible):
+    obj = object_by_name(name)
+    if obj is not None and hasattr(obj, "ViewObject"):
+        obj.ViewObject.Visibility = bool(visible)
+    return obj
+
+
+def remove_object(name):
+    doc = active_document()
+    obj = object_by_name(name)
+    if doc is None or obj is None:
+        return False
+    Gui.Selection.clearSelection()
+    doc.removeObject(obj.Name)
+    doc.recompute()
+    return True
 
 
 def active_body():
