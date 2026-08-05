@@ -5,7 +5,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtGui, QtWidgets
+from PySide import QtGui
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ICON_PATH = os.path.join(_MODULE_DIR, "Resources", "icons", "SolidFreeCAD.svg")
@@ -20,12 +20,6 @@ def _apply_window_branding():
     main_window = Gui.getMainWindow()
     main_window.setWindowTitle("SolidFreeCAD Professional alpha.7")
     main_window.setWindowIcon(QtGui.QIcon(_ICON_PATH))
-    status_label = main_window.findChild(QtWidgets.QLabel, "SolidFreeCADStatusBrand")
-    if status_label is None:
-        status_label = QtWidgets.QLabel("SolidFreeCAD · Mechanical CAD · Windows")
-        status_label.setObjectName("SolidFreeCADStatusBrand")
-        status_label.setStyleSheet("font-weight: 600; padding: 0 8px;")
-        main_window.statusBar().addPermanentWidget(status_label)
 
 
 class SolidFreeCADWorkbench(Gui.Workbench):
