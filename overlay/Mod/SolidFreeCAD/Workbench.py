@@ -5,7 +5,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtGui
+from PySide import QtGui, QtWidgets
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ICON_PATH = os.path.join(_MODULE_DIR, "Resources", "icons", "SolidFreeCAD.svg")
@@ -20,6 +20,14 @@ def _apply_window_branding():
     main_window = Gui.getMainWindow()
     main_window.setWindowTitle("SolidFreeCAD Professional alpha.7")
     main_window.setWindowIcon(QtGui.QIcon(_ICON_PATH))
+
+
+def _hide_legacy_status_labels():
+    main_window = Gui.getMainWindow()
+    for object_name in ("SolidFreeCADAlpha6Status", "SolidFreeCADStatusBrand"):
+        label = main_window.findChild(QtWidgets.QLabel, object_name)
+        if label is not None:
+            label.hide()
 
 
 class SolidFreeCADWorkbench(Gui.Workbench):
@@ -56,6 +64,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
         general.SetString("AutoloadModule", "SolidFreeCADWorkbench")
         general.SetString("LastModule", "SolidFreeCADWorkbench")
         show_workspace()
+        _hide_legacy_status_labels()
         patch_command_manager()
 
     def Deactivated(self):
