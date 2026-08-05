@@ -1,4 +1,4 @@
-"""SolidFreeCAD workbench implementation loaded as a regular Python module."""
+"""SolidFreeCAD professional workbench loaded as a regular Python module."""
 from __future__ import annotations
 
 import os
@@ -18,7 +18,7 @@ def _available(command_names):
 
 def _apply_window_branding():
     main_window = Gui.getMainWindow()
-    main_window.setWindowTitle("SolidFreeCAD Desktop alpha.6")
+    main_window.setWindowTitle("SolidFreeCAD Professional alpha.7")
     main_window.setWindowIcon(QtGui.QIcon(_ICON_PATH))
     status_label = main_window.findChild(QtWidgets.QLabel, "SolidFreeCADStatusBrand")
     if status_label is None:
@@ -30,7 +30,7 @@ def _apply_window_branding():
 
 class SolidFreeCADWorkbench(Gui.Workbench):
     MenuText = "SolidFreeCAD"
-    ToolTip = "Diseño mecánico paramétrico con flujo integrado"
+    ToolTip = "Diseño mecánico paramétrico con entorno profesional integrado"
     Icon = _ICON_PATH
 
     def Initialize(self):
@@ -41,24 +41,20 @@ class SolidFreeCADWorkbench(Gui.Workbench):
                 pass
 
         from SolidFreeCAD.ClassicIcons import ensure_icon_pack
-
         ensure_icon_pack()
         from SolidFreeCAD import Commands  # noqa: F401
 
-        file_commands = _available([
-            "SFC_CreatePart", "SFC_CreateDemoPart", "SFC_Open", "SFC_Save", "Std_Undo", "Std_Redo"
-        ])
-        workflow_commands = _available([
+        # A single application menu avoids the duplicate Archivo menu seen in alpha.6.
+        commands = _available([
+            "SFC_CreatePart", "SFC_CreateDemoPart", "SFC_Open", "SFC_Save",
             "SFC_NewSketch", "SFC_Pad", "SFC_Pocket", "SFC_Revolution",
             "SFC_Fillet", "SFC_Chamfer", "SFC_CreateShaft", "SFC_ShowShaftPanel",
         ])
-        if file_commands:
-            self.appendMenu("Archivo", file_commands)
-        if workflow_commands:
-            self.appendMenu("SolidFreeCAD", workflow_commands)
+        if commands:
+            self.appendMenu("SolidFreeCAD", commands)
 
     def Activated(self):
-        from SolidFreeCAD.MechanicalWorkspace import show_workspace
+        from SolidFreeCAD.Alpha7Workspace import show_workspace
         from SolidFreeCAD.CommandBridge import patch_command_manager
 
         _apply_window_branding()
@@ -69,8 +65,7 @@ class SolidFreeCADWorkbench(Gui.Workbench):
         patch_command_manager()
 
     def Deactivated(self):
-        from SolidFreeCAD.MechanicalWorkspace import hide_workspace
-
+        from SolidFreeCAD.Alpha7Workspace import hide_workspace
         hide_workspace()
 
     def GetClassName(self):
