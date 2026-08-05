@@ -1,0 +1,63 @@
+name: Windows alpha8 standalone source
+
+on:
+  pull_request:
+    branches:
+      - agent/windows-alpha6-solidworks-workflow
+    paths:
+      - "standalone/**"
+      - ".github/workflows/windows-alpha8-standalone-source.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-standalone-shell:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Python syntax
+        shell: pwsh
+        run: python -m compileall -q standalone
+
+      - name: Enforce standalone architecture
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          root = Path("standalone")
+          required = {
+              root / "SolidFreeCADStandalone.py",
+              root / "START_SOLIDFREECAD_ALPHA8.FCMacro",
+              root / "sfc8" / "backend.py",
+              root / "sfc8" / "widgets.py",
+              root / "sfc8" / "window.py",
+          }
+          missing = [str(path) for path in required if not path.is_file()]
+          if missing:
+              raise SystemExit("Missing standalone files: " + ", ".join(missing))
+
+          offenders = []
+          for path in root.rglob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              if "Gui.runCommand" in text:
+                  offenders.append(str(path))
+          if offenders:
+              raise SystemExit(
+                  "Standalone shell must not invoke workbench-switching commands: "
+                  + ", ".join(offenders)
+              )
+
+          window = (root / "sfc8" / "window.py").read_text(encoding="utf-8")
+          backend = (root / "sfc8" / "backend.py").read_text(encoding="utf-8")
+          assert "class SolidFreeCADWindow(QtWidgets.QMainWindow)" in window
+          assert "takeCentralWidget" in window
+          assert 'doc.addObject("Sketcher::SketchObject", "Sketch")' in backend
+          print("alpha8 standalone architecture contract validated")
+          '@ | python -
