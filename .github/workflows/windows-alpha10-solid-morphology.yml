@@ -1,0 +1,64 @@
+name: Windows alpha10 solid morphology
+
+on:
+  pull_request:
+    branches:
+      - agent/windows-alpha9-manager-mechanics
+    paths:
+      - "standalone/**"
+      - ".github/workflows/windows-alpha10-solid-morphology.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-alpha10-shell:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Python syntax
+        shell: pwsh
+        run: python -m compileall -q standalone
+
+      - name: Enforce alpha10 morphology contract
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          root = Path("standalone")
+          window = (root / "sfc8" / "window.py").read_text(encoding="utf-8")
+          manager = (root / "sfc8" / "manager.py").read_text(encoding="utf-8")
+          combined = window + manager
+
+          required = (
+              'self.menuBar().hide()',
+              'self.setMenuWidget(HeaderBar(self))',
+              'SFC10CommandManagerBar',
+              'SFC10ManagerDock',
+              'SFC10PropertyHeader',
+              'SFC10FeatureTree',
+              'self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.manager)',
+              'self.host.menuBar().hide()',
+          )
+          missing = [token for token in required if token not in combined]
+          if missing:
+              raise SystemExit("Missing alpha10 morphology tokens: " + ", ".join(missing))
+
+          forbidden = (
+              'menuBar().addMenu',
+              'RightDockWidgetArea',
+              'PropertyPanel',
+              'Gui.runCommand',
+          )
+          offenders = [token for token in forbidden if token in combined]
+          if offenders:
+              raise SystemExit("Forbidden native/dual-panel architecture: " + ", ".join(offenders))
+
+          print("alpha10 integrated header, full-width command manager and left property manager validated")
+          '@ | python -

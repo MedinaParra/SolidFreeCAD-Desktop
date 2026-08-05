@@ -1,4 +1,9 @@
-"""Standalone SolidFreeCAD alpha.9 application window."""
+"""Standalone SolidFreeCAD alpha.10 application window.
+
+The native FreeCAD chrome remains hidden. SolidFreeCAD owns the header,
+command manager, left FeatureManager/PropertyManager, viewport placement and
+status bar.
+"""
 from __future__ import annotations
 
 import FreeCADGui as Gui
@@ -8,8 +13,64 @@ from . import backend
 from .manager import ManagerDock
 from .widgets import Ribbon
 
-_APP_NAME = "SolidFreeCAD Professional alpha.9"
+_APP_NAME = "SolidFreeCAD Professional alpha.10"
 _window = None
+
+
+class HeaderBar(QtWidgets.QWidget):
+    """Custom integrated header; replaces the default Qt/FreeCAD menu bar."""
+
+    def __init__(self, owner):
+        super().__init__(owner)
+        self.owner = owner
+        self.setObjectName("SFC10HeaderBar")
+        self.setFixedHeight(31)
+
+        row = QtWidgets.QHBoxLayout(self)
+        row.setContentsMargins(5, 0, 5, 0)
+        row.setSpacing(1)
+
+        brand = QtWidgets.QLabel("SolidFreeCAD")
+        brand.setObjectName("SFC10Brand")
+        brand.setMinimumWidth(112)
+        row.addWidget(brand)
+
+        for text, callback in (
+            ("Archivo", owner.show_file_menu),
+            ("Edición", owner.not_implemented),
+            ("Ver", owner.show_view_menu),
+            ("Insertar", owner.not_implemented),
+            ("Herramientas", owner.not_implemented),
+            ("Simulación", owner.not_implemented),
+            ("Ventana", owner.not_implemented),
+        ):
+            button = QtWidgets.QToolButton()
+            button.setObjectName("SFC10HeaderMenu")
+            button.setText(text)
+            button.setAutoRaise(True)
+            button.clicked.connect(callback)
+            row.addWidget(button)
+
+        row.addStretch(1)
+        self.document_title = QtWidgets.QLabel("Sin documento")
+        self.document_title.setObjectName("SFC10DocumentTitle")
+        self.document_title.setAlignment(QtCore.Qt.AlignCenter)
+        self.document_title.setMinimumWidth(220)
+        row.addWidget(self.document_title, 1)
+        row.addStretch(1)
+
+        self.search = QtWidgets.QLineEdit()
+        self.search.setObjectName("SFC10CommandSearch")
+        self.search.setPlaceholderText("Buscar comandos")
+        self.search.setClearButtonEnabled(True)
+        self.search.setMinimumWidth(205)
+        row.addWidget(self.search)
+
+        help_button = QtWidgets.QToolButton()
+        help_button.setObjectName("SFC10HeaderIcon")
+        help_button.setText("?")
+        help_button.clicked.connect(owner.show_about)
+        row.addWidget(help_button)
 
 
 class SolidFreeCADWindow(QtWidgets.QMainWindow):
@@ -22,10 +83,15 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         self.resize(1500, 900)
         self.setMinimumSize(1100, 700)
 
+        self.menuBar().hide()
+        self.setMenuWidget(HeaderBar(self))
+        self.header = self.menuWidget()
+
         self._take_document_view()
-        self._build_menu()
+        self._build_command_manager()
         self.manager = ManagerDock(self)
         self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.manager)
+        self._build_view_toolbar()
         self._build_status()
         self._apply_style()
         backend.set_light_background()
@@ -37,101 +103,123 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         self.refresh(True)
 
     def _take_document_view(self):
+        self._hide_host_chrome()
         self._host_central = self.host.takeCentralWidget()
         if self._host_central is None:
             self._host_central = QtWidgets.QLabel(
                 "No se encontró la vista de documento de FreeCAD."
             )
             self._host_central.setAlignment(QtCore.Qt.AlignCenter)
+        self._host_central.setObjectName("SFC10Viewport")
+        self.setCentralWidget(self._host_central)
 
-        container = QtWidgets.QWidget()
-        layout = QtWidgets.QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+    def _hide_host_chrome(self):
+        self.host.menuBar().hide()
+        self.host.statusBar().hide()
+        for toolbar in self.host.findChildren(QtWidgets.QToolBar):
+            toolbar.hide()
+        for dock in self.host.findChildren(QtWidgets.QDockWidget):
+            dock.hide()
 
-        quick = QtWidgets.QToolBar("Acceso rápido")
-        quick.setObjectName("SFC9QuickAccess")
-        quick.setMovable(False)
-        brand = QtWidgets.QLabel("  SolidFreeCAD  ")
-        brand.setObjectName("SFC9Brand")
-        quick.addWidget(brand)
-        for text, callback in (
-            ("Nueva", self.new_part),
-            ("Abrir", self.open_document),
-            ("Guardar", self.save_document),
-        ):
-            action = quick.addAction(text)
-            action.triggered.connect(callback)
-        spacer = QtWidgets.QWidget()
-        spacer.setSizePolicy(
-            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
-        )
-        quick.addWidget(spacer)
-        search = QtWidgets.QLineEdit()
-        search.setPlaceholderText("Buscar comandos")
-        search.setMinimumWidth(220)
-        quick.addWidget(search)
-        layout.addWidget(quick)
+    def _build_command_manager(self):
+        self.command_toolbar = QtWidgets.QToolBar("CommandManager", self)
+        self.command_toolbar.setObjectName("SFC10CommandManagerBar")
+        self.command_toolbar.setMovable(False)
+        self.command_toolbar.setFloatable(False)
+        self.command_toolbar.setAllowedAreas(QtCore.Qt.TopToolBarArea)
+        self.command_toolbar.setFixedHeight(112)
 
         self.ribbon = Ribbon(self)
-        self.ribbon.setMaximumHeight(150)
-        layout.addWidget(self.ribbon)
-        layout.addWidget(self._host_central, 1)
-        self.setCentralWidget(container)
+        self.ribbon.setObjectName("SFC10Ribbon")
+        self.ribbon.setMinimumHeight(108)
+        self.ribbon.setMaximumHeight(108)
+        self.command_toolbar.addWidget(self.ribbon)
+        self.addToolBar(QtCore.Qt.TopToolBarArea, self.command_toolbar)
 
-    def _build_menu(self):
-        file_menu = self.menuBar().addMenu("Archivo")
+    def _build_view_toolbar(self):
+        self.view_toolbar = QtWidgets.QToolBar("Vista rápida", self)
+        self.view_toolbar.setObjectName("SFC10ViewToolbar")
+        self.view_toolbar.setOrientation(QtCore.Qt.Vertical)
+        self.view_toolbar.setMovable(False)
+        self.view_toolbar.setFloatable(False)
         for text, callback in (
-            ("Nueva pieza", self.new_part),
-            ("Abrir...", self.open_document),
-            ("Guardar", self.save_document),
+            ("ISO", self.axonometric_view),
+            ("F", self.front_view),
+            ("S", self.top_view),
+            ("A", self.fit_view),
         ):
-            action = file_menu.addAction(text)
+            action = self.view_toolbar.addAction(text)
             action.triggered.connect(callback)
-        view_menu = self.menuBar().addMenu("Ver")
-        for text, callback in (
-            ("Isométrica", self.axonometric_view),
-            ("Frontal", self.front_view),
-            ("Superior", self.top_view),
-            ("Ajustar", self.fit_view),
-        ):
-            action = view_menu.addAction(text)
+        self.addToolBar(QtCore.Qt.RightToolBarArea, self.view_toolbar)
+
+    def _build_status(self):
+        self.statusBar().setFixedHeight(22)
+        self.state = QtWidgets.QLabel("Editando pieza")
+        self.statusBar().addWidget(self.state, 1)
+        self.units = QtWidgets.QLabel("MMGS")
+        self.statusBar().addPermanentWidget(self.units)
+
+    def _popup(self, entries, x=95):
+        menu = QtWidgets.QMenu(self)
+        for text, callback in entries:
+            action = menu.addAction(text)
             action.triggered.connect(callback)
-        about = self.menuBar().addMenu("Ayuda").addAction("Acerca de")
-        about.triggered.connect(
-            lambda: QtWidgets.QMessageBox.information(
-                self,
-                "SolidFreeCAD alpha.9",
-                "Ventana propia y administrador contextual único con FreeCAD como motor CAD.",
+        position = self.header.mapToGlobal(QtCore.QPoint(x, self.header.height()))
+        menu.exec_(position)
+
+    def show_file_menu(self):
+        self._popup(
+            (
+                ("Nueva pieza", self.new_part),
+                ("Abrir...", self.open_document),
+                ("Guardar", self.save_document),
             )
         )
 
-    def _build_status(self):
-        self.state = QtWidgets.QLabel("Listo")
-        self.statusBar().addWidget(self.state, 1)
-        self.statusBar().addPermanentWidget(
-            QtWidgets.QLabel("FreeCAD 1.1.1 · OpenCASCADE · FCStd")
+    def show_view_menu(self):
+        self._popup(
+            (
+                ("Isométrica", self.axonometric_view),
+                ("Frontal", self.front_view),
+                ("Superior", self.top_view),
+                ("Ajustar", self.fit_view),
+            ),
+            x=190,
+        )
+
+    def show_about(self):
+        QtWidgets.QMessageBox.information(
+            self,
+            "SolidFreeCAD alpha.10",
+            "Interfaz propia de CAD paramétrico con FreeCAD como motor.",
         )
 
     def refresh(self, force=False):
         doc = backend.active_document()
         signature = None if doc is None else tuple(
-            (o.Name, o.Label, o.TypeId, bool(getattr(getattr(o, "ViewObject", None), "Visibility", False)))
+            (
+                o.Name,
+                o.Label,
+                o.TypeId,
+                bool(getattr(getattr(o, "ViewObject", None), "Visibility", False)),
+            )
             for o in doc.Objects
         )
         if force or signature != self._signature:
             self._signature = signature
             self.manager.rebuild_tree()
             self.manager.refresh_operation()
+
         label = "Sin documento" if doc is None else (doc.Label or doc.Name)
         self.setWindowTitle(f"{_APP_NAME} — {label}")
+        self.header.document_title.setText(label)
 
     def new_part(self):
         if self.manager.operation is not None:
             self.cancel_manager_operation()
         backend.new_part()
         self.manager.show_model()
-        self.state.setText("Pieza nueva")
+        self.state.setText("Editando pieza")
         self.refresh(True)
 
     def new_sketch(self):
@@ -140,7 +228,7 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         sketch = backend.new_sketch()
         self.manager.begin_sketch(sketch.Name, rollback_on_cancel=True)
         self.ribbon.setCurrentIndex(1)
-        self.state.setText("Croquis activo · administrador contextual")
+        self.state.setText("Editando croquis")
         self.refresh(True)
 
     def add_rectangle(self):
@@ -148,7 +236,7 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
             self.new_sketch()
         backend.add_rectangle(self.manager.width.value(), self.manager.height.value())
         self.manager.refresh_operation()
-        self.state.setText("Rectángulo agregado al croquis")
+        self.state.setText("Rectángulo agregado")
         self.refresh(True)
 
     def add_circle(self):
@@ -156,14 +244,16 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
             self.new_sketch()
         backend.add_circle(self.manager.radius.value())
         self.manager.refresh_operation()
-        self.state.setText("Círculo agregado al croquis")
+        self.state.setText("Círculo agregado")
         self.refresh(True)
 
     def begin_pad(self):
         sketch = backend.active_sketch()
         if sketch is None:
             QtWidgets.QMessageBox.warning(
-                self, "Saliente/Base", "Cree o seleccione un croquis cerrado."
+                self,
+                "Saliente/Base",
+                "Cree o seleccione un croquis cerrado.",
             )
             return
         self.manager.begin_pad(sketch.Name)
@@ -203,17 +293,14 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
     def finish_sketch(self):
         if self.manager.operation == "sketch":
             self.accept_manager_operation()
-        else:
-            sketch = backend.active_sketch()
-            if sketch is not None:
-                self.manager.begin_sketch(sketch.Name, rollback_on_cancel=False)
-                self.accept_manager_operation()
 
     def show_sketch_properties(self):
         sketch = backend.active_sketch()
         if sketch is None:
             QtWidgets.QMessageBox.information(
-                self, "Croquis", "Cree o seleccione un croquis."
+                self,
+                "Croquis",
+                "Cree o seleccione un croquis.",
             )
             return
         self.manager.begin_sketch(sketch.Name, rollback_on_cancel=False)
@@ -221,7 +308,8 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
 
     def on_tree_selection(self, name):
         obj = backend.select_object(name)
-        self.manager.show_object(obj)
+        if obj is not None:
+            self.manager.selected_name = obj.Name
 
     def on_tree_double_click(self, name):
         obj = backend.object_by_name(name)
@@ -235,7 +323,10 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
 
     def open_document(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Abrir", "", "FreeCAD (*.FCStd);;STEP (*.step *.stp);;Todos (*.*)"
+            self,
+            "Abrir",
+            "",
+            "FreeCAD (*.FCStd);;STEP (*.step *.stp);;Todos (*.*)",
         )
         if path:
             backend.open_document(path)
@@ -249,7 +340,10 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         path = None
         if not doc.FileName:
             path, _ = QtWidgets.QFileDialog.getSaveFileName(
-                self, "Guardar", f"{doc.Label or doc.Name}.FCStd", "FreeCAD (*.FCStd)"
+                self,
+                "Guardar",
+                f"{doc.Label or doc.Name}.FCStd",
+                "FreeCAD (*.FCStd)",
             )
             if not path:
                 return
@@ -273,64 +367,54 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
     def not_implemented(self):
         QtWidgets.QMessageBox.information(
             self,
-            "SolidFreeCAD alpha.9",
-            "Se implementará después de estabilizar pieza, croquis y operaciones.",
+            "SolidFreeCAD alpha.10",
+            "Función pendiente de implementación.",
         )
 
     def _apply_style(self):
         self.setStyleSheet(r"""
-            QMainWindow { background: #eef1f5; }
-            QMenuBar { background: #f7f7f8; border-bottom: 1px solid #cdd1d5; }
-            QMenuBar::item { padding: 5px 9px; }
-            QToolBar#SFC9QuickAccess { background: #f7f7f8; border: 0;
-                border-bottom: 1px solid #cdd1d5; spacing: 4px; padding: 3px 6px; }
-            QLabel#SFC9Brand { color: #b32635; font-size: 15px;
-                font-weight: 700; font-style: italic; }
-            QTabWidget#SFC9Ribbon::pane { background: #f7f7f8; border: 0;
-                border-top: 1px solid #cdd1d5; }
-            QTabWidget#SFC9Ribbon QTabBar::tab { background: #eceff2;
-                padding: 5px 12px; border: 1px solid transparent; }
-            QTabWidget#SFC9Ribbon QTabBar::tab:selected { background: #f7f7f8;
-                border-color: #c5c9cd; }
-            QFrame#SFC9RibbonGroup { background: #f7f7f8;
-                border-right: 1px solid #d6d9dc; }
-            QLabel#SFC9GroupCaption { color: #606a72; font-size: 10px; }
-            QDockWidget#SFC9ManagerDock { background: white; border-right: 1px solid #bcc3c9; }
-            QTabBar#SFC9ManagerTabs::tab { background: #e9ecef; padding: 6px 7px;
-                border-right: 1px solid #c7ccd0; font-size: 10px; }
-            QTabBar#SFC9ManagerTabs::tab:selected { background: white; }
-            QTreeWidget#SFC9FeatureTree { background: white; border: 1px solid #d4d8dc; }
-            QTreeWidget#SFC9FeatureTree::item { height: 21px; }
-            QWidget#SFC9PropertyHeader { background: #e4e8eb;
-                border-bottom: 1px solid #b8c0c6; }
-            QToolButton#SFC9Accept { color: #16833b; background: #e5f5e9;
-                border: 1px solid #78b98a; font-size: 16px; min-width: 27px; }
-            QToolButton#SFC9Cancel { color: #b22c2c; background: #fae8e8;
-                border: 1px solid #ce8888; font-size: 15px; min-width: 27px; }
-            QLabel#SFC9PropertyTitle { font-weight: 650; font-size: 12px; }
-            QLabel#SFC9PropertyMessage { background: #eef5fb;
-                border: 1px solid #b9cede; padding: 7px; }
-            QToolButton#SFC9SectionHeader { background: #e8ebee; border: 0;
-                border-top: 1px solid #c5cbd0; text-align: left; padding: 5px; font-weight: 600; }
-            QLabel#SFC9SelectionBox { background: #fff8d8; border: 1px solid #d6c878;
-                padding: 6px; min-height: 25px; }
-            QLabel#SFC9Definition { background: #edf6ec; border: 1px solid #a9c9a5;
-                padding: 5px; }
-            QLabel#SFC9ManagerFooter { color: #747c82; font-size: 9px; }
-            QStatusBar { background: #f7f7f8; border-top: 1px solid #cdd1d5; }
+            QMainWindow { background: #f4f5f7; }
+            QWidget#SFC10HeaderBar { background: #f7f7f8; border-bottom: 1px solid #bfc4c8; }
+            QLabel#SFC10Brand { color: #b32635; font-size: 14px; font-weight: 700; font-style: italic; padding-left: 5px; }
+            QToolButton#SFC10HeaderMenu { border: 0; padding: 4px 6px; font-size: 10px; }
+            QToolButton#SFC10HeaderMenu:hover { background: #e7edf3; }
+            QLabel#SFC10DocumentTitle { color: #24282c; font-size: 10px; }
+            QLineEdit#SFC10CommandSearch { background: white; border: 1px solid #bfc5ca; padding: 2px 7px; min-height: 18px; }
+            QToolBar#SFC10CommandManagerBar { background: #f8f8f9; border: 0; border-bottom: 1px solid #bfc4c8; padding: 0; spacing: 0; }
+            QTabWidget#SFC10Ribbon::pane { background: #f8f8f9; border: 0; border-top: 1px solid #cfd3d7; }
+            QTabWidget#SFC10Ribbon QTabBar::tab { background: #eceeef; border: 1px solid transparent; padding: 3px 9px; font-size: 9px; }
+            QTabWidget#SFC10Ribbon QTabBar::tab:selected { background: #f8f8f9; border-color: #bdc3c8; }
+            QFrame#SFC9RibbonGroup { background: #f8f8f9; border-right: 1px solid #d1d5d8; }
+            QLabel#SFC9GroupCaption { color: #586168; font-size: 9px; }
+            QDockWidget#SFC10ManagerDock { background: white; border-right: 1px solid #aeb6bc; }
+            QWidget#SFC10ManagerShell { background: white; }
+            QWidget#SFC10ManagerModeStrip { background: #f2f3f4; border-bottom: 1px solid #aeb6bc; }
+            QToolButton#SFC10ManagerModeButton { border: 0; background: transparent; font-size: 13px; }
+            QToolButton#SFC10ManagerModeButton:checked { background: white; border: 1px solid #aeb6bc; border-bottom-color: white; }
+            QLineEdit#SFC10TreeFilter { border: 1px solid #bfc5ca; padding: 2px; }
+            QTreeWidget#SFC10FeatureTree { background: white; border: 0; font-size: 10px; }
+            QTreeWidget#SFC10FeatureTree::item { height: 19px; }
+            QLabel#SFC10ModelFooter { background: #f4f5f6; border-top: 1px solid #c5cacf; color: #30363b; font-size: 9px; padding: 3px; }
+            QWidget#SFC10PropertyHeader { background: #eef0f2; border-bottom: 1px solid #b7bec4; }
+            QToolButton#SFC10Accept { color: #157b36; background: #e7f4e9; border: 1px solid #6eaa7d; font-size: 15px; min-width: 26px; min-height: 24px; }
+            QToolButton#SFC10Cancel { color: #ae2929; background: #f7e5e5; border: 1px solid #c87979; font-size: 14px; min-width: 26px; min-height: 24px; }
+            QLabel#SFC10PropertyTitle { font-weight: 600; font-size: 11px; }
+            QLabel#SFC10PropertyMessage { background: #f7f8f9; border: 1px solid #c8cdd1; padding: 5px; font-size: 10px; }
+            QToolButton#SFC10SectionHeader { background: #e8ebed; border: 0; border-top: 1px solid #bdc4c9; text-align: left; padding: 4px; font-weight: 600; font-size: 10px; }
+            QLabel#SFC10SelectionBox { background: white; border: 1px solid #bfc5ca; padding: 5px; min-height: 24px; }
+            QLabel#SFC10Definition { background: #eff6ee; border: 1px solid #a8c5a3; padding: 4px; }
+            QToolBar#SFC10ViewToolbar { background: #f5f6f7; border-left: 1px solid #c3c8cc; spacing: 1px; }
+            QStatusBar { background: #f7f7f8; border-top: 1px solid #bfc4c8; font-size: 9px; }
         """)
 
     def closeEvent(self, event):
         if self.manager.operation is not None:
             self.cancel_manager_operation()
         self.timer.stop()
-        container = self.takeCentralWidget()
-        if container is not None and self._host_central is not None:
-            layout = container.layout()
-            if layout:
-                layout.removeWidget(self._host_central)
-            self._host_central.setParent(None)
-            self.host.setCentralWidget(self._host_central)
+        central = self.takeCentralWidget()
+        if central is not None:
+            central.setParent(None)
+            self.host.setCentralWidget(central)
         self.host.show()
         event.accept()
 
