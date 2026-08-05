@@ -1,0 +1,68 @@
+name: Windows alpha9 manager mechanics
+
+on:
+  pull_request:
+    branches:
+      - agent/windows-alpha8-standalone-shell
+    paths:
+      - "standalone/**"
+      - ".github/workflows/windows-alpha9-manager-mechanics.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-manager-mechanics:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Python syntax
+        shell: pwsh
+        run: python -m compileall -q standalone
+
+      - name: Enforce single-manager architecture
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          root = Path("standalone/sfc8")
+          required = {
+              root / "backend.py",
+              root / "manager.py",
+              root / "widgets.py",
+              root / "window.py",
+          }
+          missing = [str(path) for path in required if not path.is_file()]
+          if missing:
+              raise SystemExit("Missing alpha9 files: " + ", ".join(missing))
+
+          texts = {path.name: path.read_text(encoding="utf-8") for path in required}
+          combined = "\n".join(texts.values())
+          if "Gui.runCommand" in combined:
+              raise SystemExit("Standalone alpha9 must not activate FreeCAD workbenches")
+
+          window = texts["window.py"]
+          manager = texts["manager.py"]
+          widgets = texts["widgets.py"]
+          backend = texts["backend.py"]
+
+          assert "class ManagerDock(QtWidgets.QDockWidget)" in manager
+          assert 'self.tabs.addTab("Modelo")' in manager
+          assert 'self.tabs.addTab("Propiedades")' in manager
+          assert 'self.tabs.addTab("Configuraciones")' in manager
+          assert "accept_manager_operation" in window
+          assert "cancel_manager_operation" in window
+          assert "rollback_on_cancel" in manager
+          assert "remove_object" in backend
+          assert "RightDockWidgetArea" not in window
+          assert "PropertyPanel" not in window
+          assert "PropertyPanel" not in widgets
+          assert "self.owner.begin_pad" in widgets
+          print("alpha9 single-manager mechanics validated")
+          '@ | python -
