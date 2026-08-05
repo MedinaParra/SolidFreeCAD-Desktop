@@ -1,0 +1,24 @@
+# -*- coding: utf-8 -*-
+"""Select and launch the standalone SolidFreeCAD alpha.10 entry point."""
+import os
+import traceback
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtWidgets
+
+try:
+    selected, _ = QtWidgets.QFileDialog.getOpenFileName(
+        Gui.getMainWindow(),
+        "Seleccione SolidFreeCADStandalone.py",
+        os.path.expanduser("~"),
+        "SolidFreeCADStandalone.py (SolidFreeCADStandalone.py);;Python (*.py)",
+    )
+    if selected:
+        namespace = {"__name__": "__main__", "__file__": selected}
+        with open(selected, "rb") as source:
+            exec(compile(source.read(), selected, "exec"), namespace, namespace)
+except Exception as exc:
+    App.Console.PrintError(traceback.format_exc() + "\n")
+    QtWidgets.QMessageBox.critical(
+        Gui.getMainWindow(), "SolidFreeCAD alpha.10", str(exc)
+    )
