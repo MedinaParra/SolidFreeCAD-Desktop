@@ -1,5 +1,5 @@
-"""SolidFreeCAD alpha.8 standalone shell package."""
+"""SolidFreeCAD standalone shell package."""
 
-from .window import show_standalone
+from .window_alpha11 import show_standalone
 
 __all__ = ["show_standalone"]
