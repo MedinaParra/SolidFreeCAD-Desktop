@@ -40,9 +40,10 @@ jobs:
 
           required = {
               "controller": (
-                  'addEventCallback("SoMouseButtonEvent"',
-                  'addEventCallback("SoLocation2Event"',
-                  'addEventCallback("SoKeyboardEvent"',
+                  'addEventCallback(',
+                  '"SoMouseButtonEvent"',
+                  '"SoLocation2Event"',
+                  '"SoKeyboardEvent"',
                   'removeEventCallback(event_name, callback)',
                   'backend.add_rectangle_points',
                   'backend.add_circle_points',
