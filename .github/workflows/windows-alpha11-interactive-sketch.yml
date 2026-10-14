@@ -1,0 +1,95 @@
+name: Windows alpha11 interactive sketch
+
+on:
+  pull_request:
+    branches:
+      - agent/windows-alpha10-solid-morphology
+    paths:
+      - "standalone/**"
+      - ".github/workflows/windows-alpha11-interactive-sketch.yml"
+  workflow_dispatch:
+
+jobs:
+  validate-alpha11-interactive-sketch:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout SolidFreeCAD Desktop
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Python syntax
+        shell: pwsh
+        run: python -m compileall -q standalone
+
+      - name: Enforce alpha11 sketch interaction contract
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+
+          root = Path("standalone")
+          controller = (root / "sfc8" / "sketch_interaction.py").read_text(encoding="utf-8")
+          backend = (root / "sfc8" / "backend.py").read_text(encoding="utf-8")
+          window = (root / "sfc8" / "window_alpha11.py").read_text(encoding="utf-8")
+          widgets = (root / "sfc8" / "widgets.py").read_text(encoding="utf-8")
+          package = (root / "sfc8" / "__init__.py").read_text(encoding="utf-8")
+
+          required = {
+              "controller": (
+                  'addEventCallback("SoMouseButtonEvent"',
+                  'addEventCallback("SoLocation2Event"',
+                  'addEventCallback("SoKeyboardEvent"',
+                  'removeEventCallback(event_name, callback)',
+                  'backend.add_rectangle_points',
+                  'backend.add_circle_points',
+              ),
+              "backend": (
+                  'def add_rectangle_points',
+                  'def add_circle_points',
+                  'def prepare_sketch_view',
+                  'Sketcher.Constraint("Horizontal"',
+                  'Sketcher.Constraint("Vertical"',
+              ),
+              "window": (
+                  'SketchInteractionController',
+                  'def start_rectangle_tool',
+                  'def start_circle_tool',
+                  'def on_sketch_pointer',
+                  'SolidFreeCAD Professional alpha.11',
+              ),
+              "widgets": (
+                  'self.owner.start_rectangle_tool',
+                  'self.owner.start_circle_tool',
+                  '"Entidades interactivas"',
+              ),
+              "package": ('from .window_alpha11 import show_standalone',),
+          }
+          sources = {
+              "controller": controller,
+              "backend": backend,
+              "window": window,
+              "widgets": widgets,
+              "package": package,
+          }
+          missing = []
+          for name, tokens in required.items():
+              for token in tokens:
+                  if token not in sources[name]:
+                      missing.append(f"{name}: {token}")
+          if missing:
+              raise SystemExit("Missing alpha11 contract tokens: " + "; ".join(missing))
+
+          offenders = []
+          for path in root.rglob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              if "Gui.runCommand" in text:
+                  offenders.append(str(path))
+          if offenders:
+              raise SystemExit("Forbidden Gui.runCommand in standalone: " + ", ".join(offenders))
+
+          print("alpha11 interactive sketch contract validated")
+          '@ | python -
