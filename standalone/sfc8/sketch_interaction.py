@@ -1,8 +1,8 @@
 """Interactive sketch tools for SolidFreeCAD alpha.11.
 
 The controller owns temporary 3D-view callbacks while a sketch entity is being
-placed.  It does not activate a native FreeCAD workbench and never calls
-Gui.runCommand(); geometry is committed through the SolidFreeCAD backend.
+placed. It does not activate a native FreeCAD workbench; geometry is committed
+through the SolidFreeCAD backend instead of the native command dispatcher.
 """
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ class SketchInteractionController:
         if position is None or self.view is None:
             return None
         point = self.view.getPoint(position[0], position[1])
-        # Alpha.11 currently creates sketches on the global XY plane.  The
+        # Alpha.11 currently creates sketches on the global XY plane. The
         # viewport is forced normal to that plane, so x/y are the sketch
         # coordinates and z is intentionally discarded.
         return float(point.x), float(point.y)
