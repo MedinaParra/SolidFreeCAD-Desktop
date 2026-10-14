@@ -1,4 +1,4 @@
-"""Ribbon widgets owned by the SolidFreeCAD alpha.9 standalone application."""
+"""Ribbon widgets owned by the SolidFreeCAD alpha.11 standalone application."""
 from __future__ import annotations
 
 from PySide import QtCore, QtWidgets
@@ -22,7 +22,7 @@ class Ribbon(QtWidgets.QTabWidget):
     def __init__(self, owner):
         super().__init__()
         self.owner = owner
-        self.setObjectName("SFC9Ribbon")
+        self.setObjectName("SFC10Ribbon")
         self.setDocumentMode(True)
         self.addTab(self._operations(), "Operaciones")
         self.addTab(self._sketch(), "Croquis")
@@ -68,9 +68,13 @@ class Ribbon(QtWidgets.QTabWidget):
 
     def _sketch(self):
         return self._page((
-            ("Entidades", (
-                ("Rectángulo", self.owner.add_rectangle, True),
-                ("Círculo", self.owner.add_circle, True),
+            ("Entidades interactivas", (
+                ("Rectángulo", self.owner.start_rectangle_tool, True),
+                ("Círculo", self.owner.start_circle_tool, True),
+            )),
+            ("Por medidas", (
+                ("Rectángulo", self.owner.add_rectangle, False),
+                ("Círculo", self.owner.add_circle, False),
             )),
             ("Croquis", (
                 ("Editar parámetros", self.owner.show_sketch_properties, True),

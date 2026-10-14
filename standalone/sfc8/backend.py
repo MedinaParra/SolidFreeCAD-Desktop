@@ -1,6 +1,7 @@
-"""FreeCAD document and geometry backend for the alpha.9 shell."""
+"""FreeCAD document and geometry backend for the alpha.11 standalone shell."""
 from __future__ import annotations
 
+import math
 import os
 
 import FreeCAD as App
@@ -111,18 +112,18 @@ def new_sketch():
     doc.recompute()
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sketch)
+    prepare_sketch_view()
     return sketch
 
 
-def add_rectangle(width, height):
-    sketch = active_sketch() or new_sketch()
-    w, h = float(width), float(height)
-    x0, y0 = -w / 2.0, -h / 2.0
+def _append_rectangle(sketch, p0, p1):
+    x0, y0 = float(p0[0]), float(p0[1])
+    x1, y1 = float(p1[0]), float(p1[1])
     points = (
         App.Vector(x0, y0, 0),
-        App.Vector(x0 + w, y0, 0),
-        App.Vector(x0 + w, y0 + h, 0),
-        App.Vector(x0, y0 + h, 0),
+        App.Vector(x1, y0, 0),
+        App.Vector(x1, y1, 0),
+        App.Vector(x0, y1, 0),
     )
     geometries = (
         Part.LineSegment(points[0], points[1]),
@@ -142,17 +143,53 @@ def add_rectangle(width, height):
     sketch.addConstraint(Sketcher.Constraint("Vertical", indices[1]))
     sketch.addConstraint(Sketcher.Constraint("Vertical", indices[3]))
     sketch.Document.recompute()
+    return indices
+
+
+def add_rectangle(width, height):
+    """Legacy numeric rectangle centered at the sketch origin."""
+    sketch = active_sketch() or new_sketch()
+    w, h = float(width), float(height)
+    _append_rectangle(sketch, (-w / 2.0, -h / 2.0), (w / 2.0, h / 2.0))
     fit_view()
     return sketch
 
 
-def add_circle(radius):
+def add_rectangle_points(first_point, second_point):
+    """Create a rectangle from two mouse-picked opposite corners."""
     sketch = active_sketch() or new_sketch()
+    _append_rectangle(sketch, first_point, second_point)
+    fit_view()
+    return sketch
+
+
+def _append_circle(sketch, center, radius):
     r = float(radius)
     sketch.addGeometry(
-        Part.Circle(App.Vector(0, 0, 0), App.Vector(0, 0, 1), r), False
+        Part.Circle(
+            App.Vector(float(center[0]), float(center[1]), 0),
+            App.Vector(0, 0, 1),
+            r,
+        ),
+        False,
     )
     sketch.Document.recompute()
+
+
+def add_circle(radius):
+    """Legacy numeric circle centered at the sketch origin."""
+    sketch = active_sketch() or new_sketch()
+    _append_circle(sketch, (0.0, 0.0), float(radius))
+    fit_view()
+    return sketch
+
+
+def add_circle_points(center, rim_point):
+    """Create a circle from a mouse-picked center and rim point."""
+    sketch = active_sketch() or new_sketch()
+    dx = float(rim_point[0]) - float(center[0])
+    dy = float(rim_point[1]) - float(center[1])
+    _append_circle(sketch, center, math.hypot(dx, dy))
     fit_view()
     return sketch
 
@@ -232,6 +269,14 @@ def top_view():
 def fit_view():
     view = _view()
     if view:
+        view.fitAll()
+
+
+def prepare_sketch_view():
+    """Place the global-XY sketch normal to the camera for mouse drawing."""
+    view = _view()
+    if view:
+        view.viewTop()
         view.fitAll()
 
 
