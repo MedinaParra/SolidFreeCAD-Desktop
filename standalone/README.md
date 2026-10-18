@@ -44,6 +44,7 @@ macro. También puede abrir `SolidFreeCADStandalone.py` desde FreeCAD.
   lineal usa separación entre instancias; el circular usa ángulo total.
 - Comprobación de cada instancia del patrón: una copia fuera del cuerpo o un
   saliente desconectado impide confirmar y muestra la instancia problemática.
+  La comprobación se repite al editar croquis u operaciones anteriores al patrón.
 - Vista preliminar diferida al cambiar parámetros, inversión y simetría.
 - Aceptar/cancelar mediante transacciones nativas y Deshacer/Rehacer.
 - Árbol jerárquico con filtro, selección, edición por doble clic, cambio de nombre

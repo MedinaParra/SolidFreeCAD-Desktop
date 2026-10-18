@@ -234,9 +234,7 @@ class SketchSession:
         self.doc.recompute()
         if self.sketch.solve() != 0:
             raise ValueError("El croquis contiene restricciones incompatibles.")
-        for dependent in self.sketch.InListRecursive:
-            if dependent.TypeId in {spec[0] for spec in FEATURES.values()} and "Invalid" in dependent.State:
-                raise ValueError("El croquis invalida una operación posterior: " + dependent.Label)
+        _validate_dependents(self.sketch)
         self.doc.commitTransaction()
         self.closed = True
         _editing_sketch = None
@@ -615,6 +613,34 @@ def _validate_pattern_instances(feature, kind, value, count, axis, reverse):
                 raise ValueError(f"La instancia {occurrence + 1} no se puede aplicar al cuerpo. Revise separación, eje o dirección.")
 
 
+def _validate_dependents(obj):
+    for dependent in obj.InListRecursive:
+        if dependent.TypeId not in {spec[0] for spec in FEATURES.values()}:
+            continue
+        if "Invalid" in dependent.State:
+            raise ValueError("La modificación invalida una operación posterior: " + dependent.Label)
+        kind = next((k for k in PATTERNS if FEATURES[k][0] == dependent.TypeId), None)
+        if kind is None or str(dependent.TransformMode) != "Features" or str(dependent.Mode) != "Extent":
+            continue
+        reference = getattr(dependent, "Direction" if kind == "linear_pattern" else "Axis")
+        role = getattr(reference[0], "Role", "") if reference and reference[0] is not None else ""
+        if role not in ("X_Axis", "Y_Axis", "Z_Axis") or len(dependent.Originals) != 1:
+            continue
+        if dependent.Originals[0].TypeId not in ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Revolution"):
+            continue
+        second = getattr(dependent, "Direction2", None)
+        if second and second[0] is not None:
+            continue
+        count = int(dependent.Occurrences)
+        if not 2 <= count <= 100:
+            continue
+        value = float(dependent.Length) / (count - 1) if kind == "linear_pattern" else float(dependent.Angle)
+        try:
+            _validate_pattern_instances(dependent, kind, value, count, role[0], bool(dependent.Reversed))
+        except ValueError as exc:
+            raise ValueError(dependent.Label + ": " + str(exc)) from exc
+
+
 class FeatureSession:
     """One reversible native feature, including its debounced live preview."""
     def __init__(self, kind, profile=None, edge_selection=None, feature=None, pattern_source=None):
@@ -715,9 +741,7 @@ class FeatureSession:
                 raise ValueError("La operación no genera un sólido válido. Revise perfil, dirección, intersección o medida.")
             if self.kind in PATTERNS:
                 _validate_pattern_instances(obj, self.kind, value, int(count), pattern_axis, reverse)
-            for dependent in obj.InListRecursive:
-                if dependent.TypeId in {spec[0] for spec in FEATURES.values()} and "Invalid" in dependent.State:
-                    raise ValueError("La modificación invalida una operación posterior: " + dependent.Label)
+            _validate_dependents(obj)
             self.error = ""
         except Exception as exc:
             self.valid = False

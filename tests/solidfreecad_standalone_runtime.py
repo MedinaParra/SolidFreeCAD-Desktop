@@ -325,6 +325,23 @@ def sketch_and_pattern_checks():
     edit = b.FeatureSession("linear_pattern", feature=pattern)
     check("pattern_edit_after_reopen", edit.update(value=20, count=4, pattern_axis="X"))
     edit.cancel()
+    edit = b.FeatureSession("linear_pattern", feature=pattern)
+    edit.update(value=20, count=2, pattern_axis="X", reverse=True)
+    edit.accept()
+    prior_volume = pattern.Shape.Volume
+    edit = b.SketchSession(sketch=linear_doc.getObject("Sketch"))
+    b.constrain_geometry(edit.sketch, 0, "Distance", 110)
+    try:
+        edit.accept()
+    except ValueError as exc:
+        check("upstream_edit_rejects_missing_pattern_copy", "instancia" in str(exc), error=str(exc))
+    else:
+        raise AssertionError("Upstream edit silently removed a pattern instance")
+    edit.cancel()
+    check("upstream_pattern_cancel_restores_solid", near(pattern.Shape.Volume, prior_volume) and near(linear_doc.getObject("Sketch").Geometry[0].toShape().Length, 160))
+    edit = b.FeatureSession("linear_pattern", feature=pattern)
+    edit.update(value=40, count=3, pattern_axis="X")
+    edit.accept()
     pattern.Mode = "Spacing"
     linear_doc.recompute()
     try:

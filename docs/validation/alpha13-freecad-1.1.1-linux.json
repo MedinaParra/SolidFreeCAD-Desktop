@@ -269,6 +269,15 @@
       "status": "PASS"
     },
     {
+      "name": "upstream_edit_rejects_missing_pattern_copy",
+      "status": "PASS",
+      "error": "Patrón lineal: La instancia 2 no se puede aplicar al cuerpo. Revise separación, eje o dirección."
+    },
+    {
+      "name": "upstream_pattern_cancel_restores_solid",
+      "status": "PASS"
+    },
+    {
       "name": "unsupported_pattern_mode_preserved",
       "status": "PASS"
     },
@@ -432,5 +441,5 @@
       "status": "PASS"
     }
   ],
-  "count": 97
+  "count": 99
 }
