@@ -48,8 +48,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Runtime extraction failed.' }
           $exe = Get-ChildItem $extract -Recurse -Filter FreeCAD.exe | Select-Object -First 1
           if (-not $exe) { throw 'FreeCAD.exe was not extracted.' }
-          $runtime = Split-Path (Split-Path $exe.FullName)
+          $exeDirectory = Split-Path $exe.FullName
+          $runtime = if ((Split-Path $exeDirectory -Leaf) -eq 'bin') { Split-Path $exeDirectory } else { $exeDirectory }
           "SOLIDFREECAD_RUNTIME=$runtime" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOLIDFREECAD_ENGINE_EXE=$($exe.FullName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "FREECAD_RUNTIME_SHA256=$actual" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           Remove-Item $asset
       - name: Exercise native modelling, file round trips and interface
@@ -65,7 +67,7 @@ jobs:
           $env:FREECAD_USER_HOME = Join-Path $env:RUNNER_TEMP 'sfc12-test-user'
           New-Item $env:FREECAD_USER_HOME -ItemType Directory -Force | Out-Null
           $script = Join-Path $env:GITHUB_WORKSPACE 'tests/solidfreecad_standalone_runtime.py'
-          $exe = Join-Path $env:SOLIDFREECAD_RUNTIME 'bin/FreeCAD.exe'
+          $exe = $env:SOLIDFREECAD_ENGINE_EXE
           $process = Start-Process $exe -ArgumentList @('--user-cfg', "`"$env:FREECAD_USER_HOME/user.cfg`"", "`"$script`"") -RedirectStandardOutput "$output/stdout.log" -RedirectStandardError "$output/stderr.log" -PassThru
           if (-not $process.WaitForExit(180000)) { Stop-Process $process.Id -Force; throw 'Native runtime test timed out.' }
           $report = Join-Path $output 'runtime-validation.json'

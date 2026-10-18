@@ -11,7 +11,7 @@ $runtime = (Resolve-Path $RuntimeRoot).Path
 $output = [IO.Path]::GetFullPath((Join-Path $source $OutputDirectory))
 $package = Join-Path $output "SolidFreeCAD-$ProductVersion-Windows-x64"
 New-Item -ItemType Directory -Path $package -Force | Out-Null
-if (-not (Test-Path (Join-Path $runtime "bin/FreeCAD.exe"))) { throw "Official runtime is incomplete." }
+if (-not ((Test-Path (Join-Path $runtime "bin/FreeCAD.exe")) -or (Test-Path (Join-Path $runtime "FreeCAD.exe")))) { throw "Official runtime is incomplete." }
 Move-Item -LiteralPath $runtime -Destination (Join-Path $package "Runtime")
 Copy-Item -LiteralPath (Join-Path $source "standalone") -Destination (Join-Path $package "Application") -Recurse
 Get-ChildItem (Join-Path $package "Application") -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force

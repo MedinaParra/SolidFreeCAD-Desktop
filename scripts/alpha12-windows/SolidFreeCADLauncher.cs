@@ -12,6 +12,8 @@ internal static class SolidFreeCADLauncher
         {
             string root = AppDomain.CurrentDomain.BaseDirectory;
             string exe = Path.Combine(root, "Runtime", "bin", "FreeCAD.exe");
+            if (!File.Exists(exe))
+                exe = Path.Combine(root, "Runtime", "FreeCAD.exe");
             string script = Path.Combine(root, "Application", "SolidFreeCADStandalone.py");
             string user = Path.Combine(root, "UserData");
             if (!File.Exists(exe) || !File.Exists(script))
