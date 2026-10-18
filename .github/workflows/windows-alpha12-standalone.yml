@@ -54,6 +54,27 @@ jobs:
           "SOLIDFREECAD_ENGINE_EXE=$($exe.FullName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "FREECAD_RUNTIME_SHA256=$actual" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           Remove-Item $asset
+      - name: Enable software OpenGL on the GPU-less test runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mesa = Join-Path $env:RUNNER_TEMP 'mesa-test.7z'
+          Invoke-WebRequest 'https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z' -OutFile $mesa
+          $expected = '351fc8c8b695878ffb3eaa044b3ead08672a48b1a045e3c3e3975811df0f6695'
+          if ((Get-FileHash $mesa -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Mesa test renderer checksum mismatch.' }
+          $mesaRoot = Join-Path $env:RUNNER_TEMP 'mesa-test'
+          & 7z x $mesa "-o$mesaRoot" 'x64/opengl32.dll' 'x64/libgallium_wgl.dll' -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa extraction failed.' }
+          $native = Get-ChildItem $env:SOLIDFREECAD_RUNTIME -Recurse -Filter freecad.exe | Where-Object { $_.Directory.Name -eq 'bin' } | Select-Object -First 1
+          if (-not $native) { throw 'Native FreeCAD executable was not found.' }
+          foreach ($file in @('opengl32.dll', 'libgallium_wgl.dll')) {
+            $target = Join-Path $native.DirectoryName $file
+            if (Test-Path $target) { throw "Refusing to overwrite an existing runtime file: $target" }
+            Copy-Item (Join-Path $mesaRoot "x64/$file") $target
+          }
+          "SOLIDFREECAD_TEST_RENDERER_DIR=$($native.DirectoryName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "QT_OPENGL_DLL=$($native.DirectoryName)/opengl32.dll" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          'GALLIUM_DRIVER=llvmpipe' | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Exercise native modelling, file round trips and interface
         shell: pwsh
         run: |
@@ -63,18 +84,39 @@ jobs:
           $env:SOLIDFREECAD_SOURCE_ROOT = $env:GITHUB_WORKSPACE
           $env:SOLIDFREECAD_TEST_OUTPUT = $output
           $env:QT_QPA_PLATFORM = 'windows'
-          $env:QT_OPENGL = 'software'
+          $env:QT_OPENGL = 'desktop'
           $env:FREECAD_USER_HOME = Join-Path $env:RUNNER_TEMP 'sfc12-test-user'
           New-Item $env:FREECAD_USER_HOME -ItemType Directory -Force | Out-Null
           $script = Join-Path $env:GITHUB_WORKSPACE 'tests/solidfreecad_standalone_runtime.py'
           $exe = $env:SOLIDFREECAD_ENGINE_EXE
           $process = Start-Process $exe -ArgumentList @('--user-cfg', "`"$env:FREECAD_USER_HOME/user.cfg`"", "`"$script`"") -RedirectStandardOutput "$output/stdout.log" -RedirectStandardError "$output/stderr.log" -PassThru
-          if (-not $process.WaitForExit(180000)) { Stop-Process $process.Id -Force; throw 'Native runtime test timed out.' }
           $report = Join-Path $output 'runtime-validation.json'
-          if (-not (Test-Path $report)) { throw 'Native runtime test did not produce evidence.' }
+          $deadline = (Get-Date).AddSeconds(180)
+          $engines = @{}
+          while (-not (Test-Path $report) -and (Get-Date) -lt $deadline) {
+            foreach ($engine in @(Get-Process freecad -ErrorAction SilentlyContinue)) {
+              if (-not $engines.ContainsKey($engine.Id)) { $null = $engine.Handle; $engines[$engine.Id] = $engine }
+            }
+            Start-Sleep -Seconds 1
+          }
+          if (-not (Test-Path $report)) {
+            Get-Content "$output/stdout.log", "$output/stderr.log" -ErrorAction SilentlyContinue
+            throw 'Native runtime test did not produce evidence before the deadline.'
+          }
+          foreach ($engine in $engines.Values) {
+            if (-not $engine.WaitForExit(15000)) { Stop-Process $engine.Id -Force; throw 'The test engine did not shut down cleanly.' }
+            if ($engine.ExitCode -ne 0) { throw "The test engine exited with $($engine.ExitCode)." }
+          }
           $result = Get-Content $report -Raw | ConvertFrom-Json
-          if ($result.status -ne 'PASS' -or $process.ExitCode -ne 0) { throw "Runtime validation failed: $($result.error)" }
+          if ($result.status -ne 'PASS') { throw "Runtime validation failed: $($result.error)" }
           "Passed $($result.count) native checks on Windows." | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - name: Remove the CI-only software renderer before packaging
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:SOLIDFREECAD_TEST_RENDERER_DIR) {
+            Remove-Item (Join-Path $env:SOLIDFREECAD_TEST_RENDERER_DIR 'opengl32.dll'), (Join-Path $env:SOLIDFREECAD_TEST_RENDERER_DIR 'libgallium_wgl.dll') -ErrorAction SilentlyContinue
+          }
       - name: Retain CAD and visual evidence
         if: always()
         uses: actions/upload-artifact@v4
