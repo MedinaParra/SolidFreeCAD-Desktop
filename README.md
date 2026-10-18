@@ -2,49 +2,29 @@
 
 SolidFreeCAD Desktop is a mechanical-design interface built on the official FreeCAD engine. It preserves native FCStd documents, OpenCASCADE geometry, Part Design, Sketcher, TechDraw, FEM, Python and the classic FreeCAD interface while presenting a more integrated task-oriented workflow.
 
-## Current release track
+## Current development track
 
-**Windows x64 is the current delivery priority.** Ubuntu remains an official future target and shared CAD/UI code stays platform-neutral.
+Windows x64 is the delivery priority. The current standalone candidate is
+**0.1.0-alpha.12**, based on the latest alpha.11 branch of 14 October 2026.
+Ubuntu and the previous overlay remain preserved.
 
-Current development version: **0.1.0-alpha.6**
+The application owns its Qt window, menus, CommandManager, FeatureManager and
+PropertyManager. The embedded FreeCAD view handles rendering and selection.
+Geometry uses native Sketcher and Part Design objects without dispatching native
+workbench commands.
 
-## Alpha.6 interface
+Implemented: sketches on reference planes and planar faces; interactive line,
+rectangle and circle; driving dimensions; native Pad, Pocket, Revolution, Fillet
+and Chamfer; live feature previews with accept/cancel transactions; Undo/Redo;
+FCStd history and STEP exchange; search, filtering, measurement and validation.
 
-The alpha.6 workspace introduces a familiar mechanical-CAD structure using original SolidFreeCAD code and artwork:
+See [the current application guide](standalone/README.md) for installation,
+modelling steps, validation and the remaining advanced-CAD scope. This candidate
+completes basic part modelling; it does not claim parity with the full SolidWorks
+product.
 
-- tabbed CommandManager for Operations, Sketch, Surfaces, Evaluate, Shaft, Sheet Metal and Assembly;
-- integrated FeatureManager design tree;
-- contextual PropertyManager with accept/cancel controls and guided messages;
-- configurations foundation;
-- compact Heads-Up view toolbar;
-- native FreeCAD commands and FCStd documents underneath the new interface;
-- classic FreeCAD UI retained as a compatibility fallback.
-
-The project may adopt established interaction patterns common to professional mechanical CAD, but it does not bundle proprietary SolidWorks code, icons, trademarks or artwork.
-
-## Functional and validated
-
-- Windows Qt runtime repair and `qwindows.dll` packaging;
-- isolated portable configuration;
-- branded launcher, portable package and Inno Setup installer;
-- native document and Part Design Body creation;
-- native FreeCAD command delegation for sketches and features;
-- editable parametric shaft with optional keyway;
-- parametric alpha.6 demonstration plate with through-hole and pocket;
-- BRep validation;
-- FCStd save, close and reopen validation;
-- STEP export validation;
-- automated GUI structure test and Windows interface screenshot;
-- original SVG icon pack.
-
-## Experimental
-
-- sheet-metal commands depend on an installed compatible SheetMetal workbench;
-- assembly commands depend on the assembly commands available in the pinned FreeCAD runtime;
-- some advanced surface and evaluation commands vary by FreeCAD build;
-- the interface still requires physical review on Windows for spacing, DPI scaling and long editing sessions.
-
-Unavailable commands are disabled rather than represented as working features.
+The interface follows common professional mechanical-CAD interaction patterns
+using original SolidFreeCAD code and vector icons.
 
 ## Repository layout
 
@@ -58,7 +38,7 @@ scripts/windows/          Windows build and packaging scripts
 tests/                    Headless and graphical validation
 ```
 
-## Windows alpha.6 validation flow
+## Previous Windows alpha.6 validation flow
 
 The workflow `.github/workflows/windows-alpha6-solidworks-workflow.yml`:
 
@@ -89,7 +69,7 @@ No cloud dependency is required by this contract.
 
 - Official upstream: `FreeCAD/FreeCAD`
 - Pinned source tag: `1.1.1`
-- GUI: Qt/Python overlay plus native FreeCAD commands
+- GUI: independent Qt/Python window embedding the FreeCAD viewport; earlier overlay preserved
 - CAD kernel: official FreeCAD/OpenCASCADE runtime
 - Primary platform: Windows x64
 - Future platform: Ubuntu Linux x86-64

@@ -1,0 +1,18 @@
+# -*- coding: utf-8 -*-
+"""Launch SolidFreeCAD from this extracted directory in FreeCAD 1.1.1."""
+import os
+import traceback
+import FreeCAD as App
+import FreeCADGui as Gui
+from PySide import QtWidgets
+
+try:
+    selected = os.path.join(os.path.dirname(os.path.abspath(__file__)), "SolidFreeCADStandalone.py")
+    if not os.path.isfile(selected):
+        raise FileNotFoundError("Extraiga la carpeta completa y conserve el macro junto a SolidFreeCADStandalone.py.")
+    namespace = {"__name__": "__main__", "__file__": selected}
+    with open(selected, "rb") as source:
+        exec(compile(source.read(), selected, "exec"), namespace, namespace)
+except Exception as exc:
+    App.Console.PrintError(traceback.format_exc() + "\n")
+    QtWidgets.QMessageBox.critical(Gui.getMainWindow(), "SolidFreeCAD", str(exc))

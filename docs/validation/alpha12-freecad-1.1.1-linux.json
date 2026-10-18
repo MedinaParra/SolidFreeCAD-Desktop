@@ -1,0 +1,205 @@
+{
+  "runtime": [
+    "1",
+    "1",
+    "1",
+    "20260414 (Git shallow)",
+    "Unknown",
+    "2026/04/14 22:09:59",
+    "(HEAD detached at 0108fd4b4)",
+    "0108fd4b4850cc46e625b60e53cea7a7bbe69f8d"
+  ],
+  "platform": "linux",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "native_pad_volume",
+      "status": "PASS",
+      "volume": 120000.0
+    },
+    {
+      "name": "symmetric_preview",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "symmetric_geometry",
+      "status": "PASS"
+    },
+    {
+      "name": "cancel_restores_parameters",
+      "status": "PASS"
+    },
+    {
+      "name": "parametric_edit",
+      "status": "PASS"
+    },
+    {
+      "name": "native_undo",
+      "status": "PASS"
+    },
+    {
+      "name": "native_redo",
+      "status": "PASS"
+    },
+    {
+      "name": "planar_face_support",
+      "status": "PASS"
+    },
+    {
+      "name": "pocket_depth",
+      "status": "PASS",
+      "volume": 176858.4073464102
+    },
+    {
+      "name": "through_all_preview",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "through_all_volume",
+      "status": "PASS",
+      "volume": 170575.22203923063
+    },
+    {
+      "name": "invalid_preview_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid_preview_rollback",
+      "status": "PASS"
+    },
+    {
+      "name": "native_fillet",
+      "status": "PASS",
+      "volume": 170549.46981883832
+    },
+    {
+      "name": "native_chamfer",
+      "status": "PASS",
+      "volume": 170517.00669475124
+    },
+    {
+      "name": "upstream_edit_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "downstream_recompute",
+      "status": "PASS",
+      "volume": 227366.82996769733
+    },
+    {
+      "name": "step_round_trip",
+      "status": "PASS",
+      "volume": 227366.82996769706
+    },
+    {
+      "name": "fcstd_native_history",
+      "status": "PASS"
+    },
+    {
+      "name": "fcstd_edit_after_reopen",
+      "status": "PASS"
+    },
+    {
+      "name": "pad_preserves_inner_wire",
+      "status": "PASS",
+      "volume": 113716.81469282041
+    },
+    {
+      "name": "local_plane_coordinates",
+      "status": "PASS"
+    },
+    {
+      "name": "native_revolution",
+      "status": "PASS",
+      "volume": 25132.741228718347
+    },
+    {
+      "name": "partial_reversed_revolution",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "partial_revolution_volume",
+      "status": "PASS"
+    },
+    {
+      "name": "cancel_sketch_restores_geometry_and_dimensions",
+      "status": "PASS"
+    },
+    {
+      "name": "driving_dimension_updates_solid",
+      "status": "PASS"
+    },
+    {
+      "name": "dependent_references_protected",
+      "status": "PASS"
+    },
+    {
+      "name": "native_horizontal_relation",
+      "status": "PASS"
+    },
+    {
+      "name": "layout_1366",
+      "status": "PASS",
+      "viewport": [
+        1051,
+        595
+      ]
+    },
+    {
+      "name": "layout_1920",
+      "status": "PASS",
+      "viewport": [
+        1605,
+        907
+      ]
+    },
+    {
+      "name": "preview_callback_registration",
+      "status": "PASS"
+    },
+    {
+      "name": "transient_rectangle_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "escape_removes_transient_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "interactive_circle_commit",
+      "status": "PASS"
+    },
+    {
+      "name": "cancel_removes_new_sketch",
+      "status": "PASS"
+    },
+    {
+      "name": "property_manager_native_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "property_manager_cancel",
+      "status": "PASS"
+    },
+    {
+      "name": "feature_tree_filter",
+      "status": "PASS"
+    },
+    {
+      "name": "command_search",
+      "status": "PASS"
+    },
+    {
+      "name": "single_manager",
+      "status": "PASS"
+    },
+    {
+      "name": "host_restored_on_close",
+      "status": "PASS"
+    }
+  ],
+  "count": 42
+}

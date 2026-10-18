@@ -1,0 +1,105 @@
+name: SolidFreeCAD alpha12 native CAD and Windows packages
+
+on:
+  pull_request:
+    branches: [agent/windows-alpha11-interactive-sketch]
+    paths:
+      - 'standalone/**'
+      - 'tests/solidfreecad_standalone_runtime.py'
+      - 'scripts/alpha12-windows/**'
+      - '.github/workflows/windows-alpha12-standalone.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-cad-and-ui:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate source and independent-window boundary
+        shell: pwsh
+        run: |
+          python -m compileall -q standalone tests/solidfreecad_standalone_runtime.py
+          @'
+          from pathlib import Path
+          for path in Path('standalone').rglob('*.py'):
+              assert 'Gui.runCommand' not in path.read_text(encoding='utf-8'), path
+          print('Standalone source contract passed')
+          '@ | python -
+      - name: Download and verify official FreeCAD 1.1.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $asset = 'FreeCAD_1.1.1-Windows-x86_64-py311.7z'
+          $url = "https://github.com/FreeCAD/FreeCAD/releases/download/1.1.1/$asset"
+          Invoke-WebRequest $url -OutFile $asset
+          Invoke-WebRequest "$url-SHA256.txt" -OutFile "$asset.sha256"
+          $expected = ((Get-Content "$asset.sha256" -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Official runtime checksum mismatch.' }
+          $extract = Join-Path $env:RUNNER_TEMP 'SolidFreeCAD-alpha12-runtime'
+          & 7z x $asset "-o$extract" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime extraction failed.' }
+          $exe = Get-ChildItem $extract -Recurse -Filter FreeCAD.exe | Select-Object -First 1
+          if (-not $exe) { throw 'FreeCAD.exe was not extracted.' }
+          $runtime = Split-Path (Split-Path $exe.FullName)
+          "SOLIDFREECAD_RUNTIME=$runtime" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "FREECAD_RUNTIME_SHA256=$actual" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Remove-Item $asset
+      - name: Exercise native modelling, file round trips and interface
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:GITHUB_WORKSPACE 'dist/standalone-validation'
+          New-Item $output -ItemType Directory -Force | Out-Null
+          $env:SOLIDFREECAD_SOURCE_ROOT = $env:GITHUB_WORKSPACE
+          $env:SOLIDFREECAD_TEST_OUTPUT = $output
+          $env:QT_QPA_PLATFORM = 'windows'
+          $env:QT_OPENGL = 'software'
+          $env:FREECAD_USER_HOME = Join-Path $env:RUNNER_TEMP 'sfc12-test-user'
+          New-Item $env:FREECAD_USER_HOME -ItemType Directory -Force | Out-Null
+          $script = Join-Path $env:GITHUB_WORKSPACE 'tests/solidfreecad_standalone_runtime.py'
+          $exe = Join-Path $env:SOLIDFREECAD_RUNTIME 'bin/FreeCAD.exe'
+          $process = Start-Process $exe -ArgumentList @('--user-cfg', "`"$env:FREECAD_USER_HOME/user.cfg`"", "`"$script`"") -RedirectStandardOutput "$output/stdout.log" -RedirectStandardError "$output/stderr.log" -PassThru
+          if (-not $process.WaitForExit(180000)) { Stop-Process $process.Id -Force; throw 'Native runtime test timed out.' }
+          $report = Join-Path $output 'runtime-validation.json'
+          if (-not (Test-Path $report)) { throw 'Native runtime test did not produce evidence.' }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if ($result.status -ne 'PASS' -or $process.ExitCode -ne 0) { throw "Runtime validation failed: $($result.error)" }
+          "Passed $($result.count) native checks on Windows." | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - name: Retain CAD and visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-alpha12-Windows-validation
+          path: dist/standalone-validation/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Ensure Inno Setup is available
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe")) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          }
+      - name: Build standalone portable and installer
+        shell: pwsh
+        run: ./scripts/alpha12-windows/Package-Standalone.ps1 -RuntimeRoot $env:SOLIDFREECAD_RUNTIME
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFreeCAD-0.1.0-alpha.12-Windows-x64
+          path: |
+            dist/*-Portable.zip
+            dist/*-Portable.zip.sha256
+            dist/*-Setup.exe
+            dist/*-Setup.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

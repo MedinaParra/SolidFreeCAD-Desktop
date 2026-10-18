@@ -1,5 +1,9 @@
 """SolidFreeCAD standalone shell package."""
 
-from .window_alpha11 import show_standalone
+
+def show_standalone():
+    from .window_alpha12 import show_standalone as show
+    return show()
+
 
 __all__ = ["show_standalone"]

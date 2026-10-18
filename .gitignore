@@ -8,3 +8,5 @@ out/
 *.VC.db
 .vs/
 CMakeUserPresets.json
+__pycache__/
+*.py[cod]
