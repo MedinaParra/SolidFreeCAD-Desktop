@@ -25,11 +25,14 @@ class Ribbon(QtWidgets.QTabWidget):
             ("Crear", [("sketch", True), ("pad", True), ("revolution", True)]),
             ("Quitar material", [("pocket", True)]),
             ("Acabados", [("fillet", True), ("chamfer", True)]),
+            ("Repetir operaciones", [("linear_pattern", False), ("polar_pattern", False)]),
             ("Editar", [("edit", False), ("visibility", False)]),
             ("Archivo", [("export", False), ("save_as", False)]),
         ]), "Operaciones")
         self.addTab(self._page([
-            ("Entidades", [("line", True), ("rectangle", True), ("circle", True)]),
+            ("Trazar", [("line", True), ("polyline", True), ("arc", True)]),
+            ("Perfiles", [("rectangle", True), ("circle", True), ("slot", True)]),
+            ("Editar", [("trim", True)]),
             ("Por medidas", [("rectangle_numeric", False), ("circle_numeric", False)]),
             ("Relaciones", [("dimension", True)]),
             ("Croquis", [("accept", True), ("cancel", False)]),

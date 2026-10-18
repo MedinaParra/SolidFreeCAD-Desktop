@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][string]$RuntimeRoot,
     [string]$OutputDirectory = "dist",
-    [string]$ProductVersion = "0.1.0-alpha.12"
+    [string]$ProductVersion = "0.1.0-alpha.13"
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest

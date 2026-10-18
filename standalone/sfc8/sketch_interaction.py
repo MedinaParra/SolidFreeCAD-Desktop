@@ -2,6 +2,7 @@
 import math
 import FreeCADGui as Gui
 from . import backend
+from .sketch_geometry import arc_through_points, distance, TOLERANCE
 
 
 class SketchInteractionController:
@@ -10,17 +11,21 @@ class SketchInteractionController:
         self.view = None
         self.tool = None
         self.first_point = None
+        self.middle_point = None
+        self.chain_start = None
+        self.chain_segments = 0
         self.callbacks = []
         self.preview_root = None
         self.preview_coords = None
         self.preview_lines = None
+        self.pick_tolerance = TOLERANCE
 
     @property
     def active(self):
         return self.tool is not None
 
     def start(self, tool):
-        if tool not in ("line", "rectangle", "circle"):
+        if tool not in ("line", "polyline", "rectangle", "circle", "arc", "trim"):
             raise ValueError("Herramienta de croquis desconocida.")
         if backend.active_sketch() is None or Gui.activeDocument() is None:
             raise ValueError("Abra un croquis antes de dibujar.")
@@ -34,7 +39,12 @@ class SketchInteractionController:
         except Exception:
             self.cancel(silent=True)
             raise
-        self.owner.on_sketch_tool_state(tool, "Seleccione el primer punto. Esc cancela la herramienta.")
+        messages = {
+            "polyline": "Seleccione el inicio y continúe con clics. Vuelva al inicio para cerrar; Enter termina.",
+            "arc": "Arco de tres puntos: inicio, punto intermedio y final.",
+            "trim": "Seleccione el tramo que desea recortar. Esc termina la herramienta.",
+        }
+        self.owner.on_sketch_tool_state(tool, messages.get(tool, "Seleccione el primer punto. Esc cancela la herramienta."))
 
     def _make_preview(self):
         from pivy import coin
@@ -70,7 +80,8 @@ class SketchInteractionController:
                     pass
         self.callbacks = []
         self.preview_root = self.preview_coords = self.preview_lines = None
-        self.view = self.tool = self.first_point = None
+        self.view = self.tool = self.first_point = self.middle_point = self.chain_start = None
+        self.chain_segments = 0
         if was_active and not silent:
             self.owner.on_sketch_tool_cancelled()
 
@@ -80,21 +91,22 @@ class SketchInteractionController:
             return None
         point = backend.pointer_in_sketch(self.view.getPoint(position[0], position[1]))
         nearby = backend.pointer_in_sketch(self.view.getPoint(position[0] + 7, position[1]))
-        tolerance = max(1e-6, math.hypot(nearby[0] - point[0], nearby[1] - point[1]))
-        sketch = backend.active_sketch()
+        self.pick_tolerance = max(TOLERANCE, distance(nearby, point))
+        if self.tool == "trim":
+            return point
         targets = [(0.0, 0.0)]
-        for geometry in sketch.Geometry:
+        for geometry in backend.active_sketch().Geometry:
             for attr in ("StartPoint", "EndPoint", "Center"):
-                target = getattr(geometry, attr, None)
-                if target is not None:
-                    targets.append((float(target.x), float(target.y)))
-        closest = min(targets, key=lambda p: math.hypot(p[0] - point[0], p[1] - point[1]))
-        if math.hypot(closest[0] - point[0], closest[1] - point[1]) < tolerance:
+                candidate = getattr(geometry, attr, None)
+                if candidate is not None:
+                    targets.append((float(candidate.x), float(candidate.y)))
+        closest = min(targets, key=lambda p: distance(p, point))
+        if distance(closest, point) < self.pick_tolerance:
             return closest
-        if self.tool == "line" and self.first_point is not None:
-            if abs(point[0] - self.first_point[0]) < tolerance:
+        if self.tool in ("line", "polyline") and self.first_point is not None:
+            if abs(point[0] - self.first_point[0]) < self.pick_tolerance:
                 return self.first_point[0], point[1]
-            if abs(point[1] - self.first_point[1]) < tolerance:
+            if abs(point[1] - self.first_point[1]) < self.pick_tolerance:
                 return point[0], self.first_point[1]
         return point
 
@@ -107,11 +119,28 @@ class SketchInteractionController:
         if info.get("Button") != "BUTTON1":
             return
         point = self._point_from_info(info)
-        if point is None:
+        if point is not None:
+            self.place_point(point)
+
+    def place_point(self, point):
+        if self.tool == "trim":
+            try:
+                index = backend.nearest_geometry(point, self.pick_tolerance)
+                backend.trim_geometry(index, point)
+                self.owner.on_sketch_tool_completed("trim")
+            except Exception as exc:
+                self.owner.on_sketch_tool_state("trim", str(exc))
             return
         if self.first_point is None:
             self.first_point = point
+            self.chain_start = point
             self.owner.on_sketch_tool_first_point(self.tool, point)
+        elif self.tool == "arc" and self.middle_point is None:
+            if distance(self.first_point, point) <= TOLERANCE:
+                self.owner.on_sketch_tool_state("arc", "Seleccione un punto intermedio distinto del inicio.")
+                return
+            self.middle_point = point
+            self.owner.on_sketch_tool_state("arc", "Seleccione el punto final del arco.")
         else:
             self._commit(point)
 
@@ -130,8 +159,13 @@ class SketchInteractionController:
         if self.tool == "rectangle":
             points = [(x, y), (point[0], y), point, (x, point[1]), (x, y)]
         elif self.tool == "circle":
-            radius = math.hypot(point[0] - x, point[1] - y)
+            radius = distance(point, self.first_point)
             points = [(x + radius * math.cos(i * math.tau / 64), y + radius * math.sin(i * math.tau / 64)) for i in range(65)]
+        elif self.tool == "arc" and self.middle_point is not None:
+            try:
+                points = arc_through_points(self.first_point, self.middle_point, point)
+            except ValueError:
+                points = [self.first_point, self.middle_point, point]
         else:
             points = [self.first_point, point]
         from FreeCAD import Vector
@@ -142,8 +176,12 @@ class SketchInteractionController:
         self.view.redraw()
 
     def _on_key(self, info):
-        if info.get("State") == "DOWN" and info.get("Key") == "ESCAPE":
-            self.cancel()
+        if info.get("State") == "DOWN":
+            if info.get("Key") == "ESCAPE":
+                self.cancel()
+            elif info.get("Key") in ("RETURN", "ENTER") and self.tool == "polyline":
+                self.cancel(silent=True)
+                self.owner.on_sketch_tool_completed("polyline")
 
     def _commit(self, second):
         tool, first = self.tool, self.first_point
@@ -152,10 +190,21 @@ class SketchInteractionController:
                 backend.add_rectangle_points(first, second)
             elif tool == "circle":
                 backend.add_circle_points(first, second)
+            elif tool == "arc":
+                backend.add_arc_points(first, self.middle_point, second)
             else:
                 backend.add_line_points(first, second)
         except Exception as exc:
             self.owner.on_sketch_tool_state(tool, str(exc))
             return
-        self.cancel(silent=True)
+        if tool == "polyline":
+            self.chain_segments += 1
+            if self.chain_segments >= 3 and distance(second, self.chain_start) <= TOLERANCE:
+                self.cancel(silent=True)
+            else:
+                self.first_point = second
+                self.preview_lines.numVertices.setValue(0)
+                self.owner.on_sketch_tool_state(tool, "Continúe con otro punto; vuelva al inicio para cerrar o pulse Enter.")
+        else:
+            self.cancel(silent=True)
         self.owner.on_sketch_tool_completed(tool)

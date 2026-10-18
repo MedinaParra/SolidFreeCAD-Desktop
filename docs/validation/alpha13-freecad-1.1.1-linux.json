@@ -1,0 +1,436 @@
+{
+  "runtime": [
+    "1",
+    "1",
+    "1",
+    "20260414 (Git shallow)",
+    "Unknown",
+    "2026/04/14 22:09:59",
+    "(HEAD detached at 0108fd4b4)",
+    "0108fd4b4850cc46e625b60e53cea7a7bbe69f8d"
+  ],
+  "platform": "linux",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "native_pad_volume",
+      "status": "PASS",
+      "volume": 120000.0
+    },
+    {
+      "name": "symmetric_preview",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "symmetric_geometry",
+      "status": "PASS"
+    },
+    {
+      "name": "cancel_restores_parameters",
+      "status": "PASS"
+    },
+    {
+      "name": "parametric_edit",
+      "status": "PASS"
+    },
+    {
+      "name": "native_undo",
+      "status": "PASS"
+    },
+    {
+      "name": "native_redo",
+      "status": "PASS"
+    },
+    {
+      "name": "planar_face_support",
+      "status": "PASS"
+    },
+    {
+      "name": "pocket_depth",
+      "status": "PASS",
+      "volume": 176858.4073464102
+    },
+    {
+      "name": "through_all_preview",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "through_all_volume",
+      "status": "PASS",
+      "volume": 170575.22203923063
+    },
+    {
+      "name": "invalid_preview_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid_preview_rollback",
+      "status": "PASS"
+    },
+    {
+      "name": "native_fillet",
+      "status": "PASS",
+      "volume": 170549.46981883832
+    },
+    {
+      "name": "native_chamfer",
+      "status": "PASS",
+      "volume": 170517.00669475124
+    },
+    {
+      "name": "upstream_edit_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "downstream_recompute",
+      "status": "PASS",
+      "volume": 227366.82996769733
+    },
+    {
+      "name": "step_round_trip",
+      "status": "PASS",
+      "volume": 227366.82996769706
+    },
+    {
+      "name": "fcstd_native_history",
+      "status": "PASS"
+    },
+    {
+      "name": "fcstd_edit_after_reopen",
+      "status": "PASS"
+    },
+    {
+      "name": "pad_preserves_inner_wire",
+      "status": "PASS",
+      "volume": 113716.81469282041
+    },
+    {
+      "name": "local_plane_coordinates",
+      "status": "PASS",
+      "coordinates": [
+        8.0,
+        20.0
+      ]
+    },
+    {
+      "name": "native_revolution",
+      "status": "PASS",
+      "volume": 25132.741228718347
+    },
+    {
+      "name": "partial_reversed_revolution",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "partial_revolution_volume",
+      "status": "PASS"
+    },
+    {
+      "name": "cancel_sketch_restores_geometry_and_dimensions",
+      "status": "PASS"
+    },
+    {
+      "name": "driving_dimension_updates_solid",
+      "status": "PASS"
+    },
+    {
+      "name": "dependent_references_protected",
+      "status": "PASS"
+    },
+    {
+      "name": "native_horizontal_relation",
+      "status": "PASS"
+    },
+    {
+      "name": "slot_native_tangent_wire",
+      "status": "PASS"
+    },
+    {
+      "name": "slot_analytic_volume",
+      "status": "PASS",
+      "volume": 11141.592653589794
+    },
+    {
+      "name": "slot_driving_radius",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid_slot_preserves_sketch",
+      "status": "PASS"
+    },
+    {
+      "name": "slot_edit_cancel",
+      "status": "PASS"
+    },
+    {
+      "name": "three_point_arcs_both_directions",
+      "status": "PASS"
+    },
+    {
+      "name": "arc_preview_matches_native_curve",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid_arc_preserves_sketch",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid_snapped_line_rolls_back",
+      "status": "PASS"
+    },
+    {
+      "name": "parallel_and_equal_relations",
+      "status": "PASS"
+    },
+    {
+      "name": "conflicting_relation_rolls_back",
+      "status": "PASS"
+    },
+    {
+      "name": "perpendicular_relation",
+      "status": "PASS"
+    },
+    {
+      "name": "concentric_and_equal_circles",
+      "status": "PASS"
+    },
+    {
+      "name": "diameter_updates_existing_dimension",
+      "status": "PASS"
+    },
+    {
+      "name": "line_circle_tangency",
+      "status": "PASS"
+    },
+    {
+      "name": "angle_uses_degrees_and_updates_datum",
+      "status": "PASS"
+    },
+    {
+      "name": "native_trim_at_intersection",
+      "status": "PASS"
+    },
+    {
+      "name": "trim_cancel_restores_entity",
+      "status": "PASS"
+    },
+    {
+      "name": "native_linear_pattern",
+      "status": "PASS",
+      "volume": 157643.80550980763
+    },
+    {
+      "name": "linear_pattern_axis_y",
+      "status": "PASS"
+    },
+    {
+      "name": "linear_pattern_reverse",
+      "status": "PASS"
+    },
+    {
+      "name": "missing_pattern_instances_rejected",
+      "status": "PASS",
+      "error": "La instancia 2 no se puede aplicar al cuerpo. Revise separación, eje o dirección."
+    },
+    {
+      "name": "invalid_pattern_count_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "pattern_cancel_restores_parameters_and_tip",
+      "status": "PASS"
+    },
+    {
+      "name": "pattern_count_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "pattern_undo",
+      "status": "PASS"
+    },
+    {
+      "name": "pattern_redo",
+      "status": "PASS"
+    },
+    {
+      "name": "pattern_on_placed_body",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "pattern_fcstd_native_history",
+      "status": "PASS"
+    },
+    {
+      "name": "pattern_edit_after_reopen",
+      "status": "PASS"
+    },
+    {
+      "name": "unsupported_pattern_mode_preserved",
+      "status": "PASS"
+    },
+    {
+      "name": "native_full_polar_pattern",
+      "status": "PASS",
+      "volume": 108384.9465488479
+    },
+    {
+      "name": "partial_polar_pattern_includes_endpoints",
+      "status": "PASS"
+    },
+    {
+      "name": "partial_polar_pattern_reverse",
+      "status": "PASS"
+    },
+    {
+      "name": "pattern_step_round_trip",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid_new_pattern_rollback",
+      "status": "PASS"
+    },
+    {
+      "name": "additive_pattern_material",
+      "status": "PASS",
+      "error": ""
+    },
+    {
+      "name": "disconnected_additive_copies_rejected",
+      "status": "PASS",
+      "error": "La operación no genera un sólido válido. Revise perfil, dirección, intersección o medida."
+    },
+    {
+      "name": "layout_1366",
+      "status": "PASS",
+      "viewport": [
+        1051,
+        595
+      ]
+    },
+    {
+      "name": "layout_1920",
+      "status": "PASS",
+      "viewport": [
+        1605,
+        907
+      ]
+    },
+    {
+      "name": "reference_plane_sketch_visible_inside_solid",
+      "status": "PASS"
+    },
+    {
+      "name": "preview_callback_registration",
+      "status": "PASS"
+    },
+    {
+      "name": "transient_rectangle_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "escape_removes_transient_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "interactive_circle_commit",
+      "status": "PASS"
+    },
+    {
+      "name": "cancel_removes_new_sketch",
+      "status": "PASS"
+    },
+    {
+      "name": "cancel_restores_solid_visibility",
+      "status": "PASS"
+    },
+    {
+      "name": "property_manager_native_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "property_manager_cancel",
+      "status": "PASS"
+    },
+    {
+      "name": "feature_tree_filter",
+      "status": "PASS"
+    },
+    {
+      "name": "command_search",
+      "status": "PASS"
+    },
+    {
+      "name": "single_manager",
+      "status": "PASS"
+    },
+    {
+      "name": "interactive_polyline_closes_and_cleans_callbacks",
+      "status": "PASS"
+    },
+    {
+      "name": "polyline_dimension_preserves_closed_wire",
+      "status": "PASS"
+    },
+    {
+      "name": "enter_finishes_open_polyline",
+      "status": "PASS"
+    },
+    {
+      "name": "transient_three_point_arc_preview",
+      "status": "PASS"
+    },
+    {
+      "name": "interactive_arc_commit",
+      "status": "PASS"
+    },
+    {
+      "name": "interactive_trim_stays_active",
+      "status": "PASS"
+    },
+    {
+      "name": "trim_escape_keeps_sketch",
+      "status": "PASS"
+    },
+    {
+      "name": "slot_property_manager",
+      "status": "PASS"
+    },
+    {
+      "name": "angle_editor_units",
+      "status": "PASS"
+    },
+    {
+      "name": "pair_relation_editor",
+      "status": "PASS"
+    },
+    {
+      "name": "new_commands_have_original_icons",
+      "status": "PASS"
+    },
+    {
+      "name": "linear_property_manager_loads_spacing",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid_pattern_disables_accept",
+      "status": "PASS"
+    },
+    {
+      "name": "gui_creates_native_pattern",
+      "status": "PASS"
+    },
+    {
+      "name": "polar_property_manager_loads_native_axis",
+      "status": "PASS"
+    },
+    {
+      "name": "host_restored_on_close",
+      "status": "PASS"
+    }
+  ],
+  "count": 97
+}
