@@ -1,80 +1,82 @@
-# SolidFreeCAD alpha.8 — standalone application shell
+# SolidFreeCAD Desktop 0.1.0-alpha.12
 
-## Decision
+Interfaz propia para diseño mecánico con el motor oficial **FreeCAD 1.1.1**.
+La ventana conserva un CommandManager superior, un único panel izquierdo
+Modelo/Propiedades y un visor central. Los menús, iconos y controladores de
+SolidFreeCAD son originales.
 
-Alpha.8 is **not a FreeCAD workbench** and does not attempt to repaint, tabify or
-hide parts of the standard FreeCAD window.
+## Iniciar
 
-The physical Windows test showed that native GUI commands such as
-`Sketcher_NewSketch` activate another workbench and rebuild FreeCAD's TaskView.
-That behavior removes the SolidFreeCAD ribbon and restores the native Sketcher
-interface. A workbench overlay therefore cannot guarantee a stable application
-shell.
+En el paquete portable Windows, extraiga **toda la carpeta** y ejecute
+`SolidFreeCAD.exe`. El instalador añade los accesos directos correspondientes.
 
-Alpha.8 changes the boundary:
+Para ejecutar el código fuente, abra `START_SOLIDFREECAD.FCMacro` desde una
+instalación de FreeCAD 1.1.1 y ejecútelo, conservando la carpeta `sfc8` junto al
+macro. También puede abrir `SolidFreeCADStandalone.py` desde FreeCAD.
 
-```text
-SolidFreeCAD QMainWindow
-├── own menu, quick access and command ribbon
-├── own FeatureManager
-├── own PropertyManager / task state
-├── FreeCAD document viewport embedded in the center
-└── SolidFreeCAD command controllers
-    ├── FreeCAD App documents and FCStd
-    ├── Sketcher document objects
-    ├── Part / OpenCASCADE geometry
-    └── FreeCAD Gui view and selection services
-```
+## Funciones disponibles
 
-## Rules
+- Pieza y cuerpo Part Design, documentos FCStd, importación y exportación STEP.
+- Croquis en XY, XZ, YZ y sobre caras planas de un cuerpo Part Design.
+- Línea, rectángulo y círculo con dos clics y vista preliminar transitoria.
+- Ajuste geométrico del cursor al origen, extremos y centros; inferencia
+  horizontal y vertical para líneas. El ajuste a puntos no añade por sí solo
+  una relación permanente entre entidades independientes.
+- Rectángulos y círculos por medidas con cotas nativas; edición de longitudes,
+  radios y relaciones horizontales/verticales desde Propiedades.
+- Saliente/Base paramétrico nativo, incluidos perfiles con agujeros.
+- Corte extruido por profundidad o por todo.
+- Revolución con ángulo, dirección y eje horizontal/vertical del croquis.
+- Redondeo y chaflán sobre una o varias aristas seleccionadas con Ctrl + clic.
+- Vista preliminar diferida al cambiar parámetros, inversión y simetría.
+- Aceptar/cancelar mediante transacciones nativas y Deshacer/Rehacer.
+- Árbol jerárquico con filtro, selección, edición por doble clic, cambio de nombre
+  y visibilidad. La eliminación protege las referencias posteriores.
+- Búsqueda de comandos, atajos, medición y comprobación BRep.
+- Vistas isométrica, frontal, superior y derecha; sombreado o alámbrico.
 
-1. SolidFreeCAD owns the top-level `QMainWindow`.
-2. FreeCAD's standard main window remains hidden while SolidFreeCAD is active.
-3. The native document viewport is embedded in the SolidFreeCAD central area.
-4. Modelling commands must not call `Gui.runCommand()` when that command can
-   activate a workbench or open a native TaskView.
-5. Sketch creation and early sketch geometry are performed directly through
-   `Sketcher::SketchObject`.
-6. Solid creation is initially performed through controlled Part/OpenCASCADE
-   operations and stored as native document features.
-7. FCStd remains the project file format.
-8. Alpha.6 remains the validated engine/runtime reference, not the GUI base.
+## Flujo de ejemplo
 
-## Current prototype
+1. Cree **Nueva pieza** y un **Nuevo croquis** sobre Planta (XY).
+2. Dibuje un rectángulo o introduzca su ancho y alto en Propiedades.
+3. Acepte el croquis y seleccione **Saliente/Base**.
+4. Cambie la profundidad: la operación nativa genera la vista preliminar.
+5. Confirme y seleccione una cara plana superior del sólido.
+6. Cree otro croquis, dibuje un círculo y acepte.
+7. Seleccione **Corte extruido** y active **Por todo** para perforar la pieza.
+8. Seleccione las aristas deseadas con Ctrl + clic y aplique Redondeo o Chaflán.
+9. Guarde FCStd para conservar las operaciones y exporte STEP para intercambio.
+10. Doble clic en una operación del árbol para modificarla; confirme o cancele.
 
-`SolidFreeCADStandalone.py` creates a separate application window and implements:
+`Esc` cancela primero la herramienta de dibujo. Un segundo `Esc` revierte la
+edición del croquis. Los comandos de archivo y cambio de documento se bloquean
+mientras una operación está activa. Cerrar SolidFreeCAD devuelve los documentos
+abiertos a la ventana de FreeCAD, incluido el trabajo todavía sin guardar.
 
-- clean application menu and quick-access area;
-- fixed tabbed ribbon owned by SolidFreeCAD;
-- custom design tree and property panel;
-- embedded FreeCAD document viewport;
-- new PartDesign Body without changing workbench;
-- new `Sketcher::SketchObject` without activating Sketcher;
-- rectangle and circle creation through the Sketcher API;
-- a controlled extruded solid from a closed sketch;
-- open/save FCStd and import STEP;
-- isometric, front, top and fit views;
-- restoration of the FreeCAD host window when the prototype closes.
+## Alcance de esta versión
 
-## Scope boundary
+Esta entrega completa el flujo básico de modelado de piezas. **No incluye**
+ensamblajes con relaciones, chapa metálica, planos TechDraw, patrones, superficies,
+barridos, recorte de entidades ni el conjunto completo de restricciones Sketcher.
+Los prototipos anteriores de esas áreas no se muestran como comandos funcionales.
+Los sólidos estáticos de alpha.11 conservan sus formas al abrirlos; no se
+convierten automáticamente en operaciones paramétricas nuevas. STEP conserva
+geometría, mientras que FCStd conserva el historial paramétrico.
 
-The first prototype proves the architecture and the stable sketch transition.
-It is not yet a production replacement for the complete Sketcher solver UI.
+Las referencias topológicas se guardan con el mecanismo nativo de FreeCAD.
+Cambios grandes de topología pueden requerir volver a seleccionar una cara o
+arista. Los croquis sobre caras se limitan a superficies planas de Part Design.
 
-The next gates are:
+## Comprobación reproducible
 
-1. validate that the standalone window remains visible through the full sequence
-   `new part -> new sketch -> rectangle -> solid`;
-2. implement mouse-driven line, rectangle, circle and trim tools using callbacks
-   on the embedded 3D view;
-3. implement SolidFreeCAD-owned constraints and dimensions panels;
-4. replace the temporary direct extrusion with a fully parametric feature proxy;
-5. add undo transactions and document observers;
-6. create a dedicated Windows launcher and installer;
-7. test 100%, 125% and 150% DPI on a physical engineering workstation.
+`tests/solidfreecad_standalone_runtime.py` se ejecuta dentro de FreeCAD 1.1.1.
+Comprueba geometría y volúmenes conocidos, huecos, caras soportadas, edición,
+cancelación, Undo/Redo, historial FCStd, intercambio STEP, callbacks del visor,
+filtro y búsqueda; captura la interfaz en 1366×768 y 1920×1080.
 
-## Intellectual property
+El workflow `.github/workflows/windows-alpha12-standalone.yml` verifica el SHA-256
+del motor oficial, ejecuta las pruebas reales en Windows y genera los paquetes
+portable e instalador solo después de aprobarlas. La validación de escalado DPI
+y sesiones prolongadas en una estación física Windows sigue pendiente.
 
-SolidFreeCAD uses its own code, terminology, layout details and visual assets.
-The goal is a familiar professional mechanical-CAD workflow, not a copy of
-SolidWorks branding, source code or proprietary artwork.
+El motor y las dependencias conservan sus avisos y licencias en `Runtime`.
