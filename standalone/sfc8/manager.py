@@ -272,6 +272,20 @@ class ManagerDock(QtWidgets.QDockWidget):
         self.value.valueChanged.connect(self._parameters_changed)
         self.axis.currentIndexChanged.connect(self._parameters_changed)
         self.feature_section.layout.addLayout(form)
+        self.pattern_count = QtWidgets.QSpinBox()
+        self.pattern_count.setRange(2, 100)
+        self.pattern_count.setToolTip("Número total de instancias, incluida la operación original")
+        self.pattern_axis = QtWidgets.QComboBox()
+        for axis in ("X", "Y", "Z"):
+            self.pattern_axis.addItem("Eje " + axis + " del cuerpo", axis)
+        self.pattern_controls = QtWidgets.QWidget()
+        pattern_form = QtWidgets.QFormLayout(self.pattern_controls)
+        pattern_form.setContentsMargins(0, 0, 0, 0)
+        pattern_form.addRow("Instancias", self.pattern_count)
+        pattern_form.addRow("Dirección / eje", self.pattern_axis)
+        self.pattern_count.valueChanged.connect(self._parameters_changed)
+        self.pattern_axis.currentIndexChanged.connect(self._parameters_changed)
+        self.feature_section.layout.addWidget(self.pattern_controls)
         self.content.addWidget(self.feature_section)
 
         self.sketch_section = CollapsibleSection("Entidades por medidas")
@@ -287,15 +301,30 @@ class ManagerDock(QtWidgets.QDockWidget):
             row.addWidget(button)
         self.sketch_section.layout.addLayout(row)
         self.content.addWidget(self.sketch_section)
+        self.slot_section = CollapsibleSection("Ranura recta")
+        slot_form = QtWidgets.QFormLayout()
+        self.slot_length, self.slot_width = self._spin(60), self._spin(20)
+        slot_form.addRow("Longitud total", self.slot_length)
+        slot_form.addRow("Ancho", self.slot_width)
+        self.slot_section.layout.addLayout(slot_form)
+        slot_button = QtWidgets.QPushButton("Crear ranura")
+        slot_button.clicked.connect(lambda: self.owner._run(self.owner.add_slot))
+        self.slot_section.layout.addWidget(slot_button)
+        self.content.addWidget(self.slot_section)
         self.dimension_section = CollapsibleSection("Cotas y relaciones")
         self.geometry = QtWidgets.QComboBox()
         self.dimension_section.layout.addWidget(self.geometry)
+        self.geometry2 = QtWidgets.QComboBox()
+        self.geometry2.setToolTip("Segunda entidad para tangencia, concentricidad, igualdad o paralelismo")
+        self.dimension_section.layout.addWidget(self.geometry2)
         self.constraint = QtWidgets.QComboBox()
-        for label, kind in [("Longitud", "Distance"), ("Radio", "Radius"), ("Horizontal", "Horizontal"), ("Vertical", "Vertical")]:
+        for label, kind in [("Longitud", "Distance"), ("Radio", "Radius"), ("Diámetro", "Diameter"), ("Ángulo de línea respecto a X", "Angle"), ("Horizontal", "Horizontal"), ("Vertical", "Vertical"), ("Tangencia", "Tangent"), ("Concentricidad", "Concentric"), ("Paralelo", "Parallel"), ("Perpendicular", "Perpendicular"), ("Igualdad", "Equal")]:
             self.constraint.addItem(label, kind)
         self.dimension_section.layout.addWidget(self.constraint)
         self.dimension_value = self._spin(25)
         self.dimension_section.layout.addWidget(self.dimension_value)
+        self.constraint.currentIndexChanged.connect(self._constraint_changed)
+        self._constraint_changed()
         apply = QtWidgets.QPushButton("Aplicar cota / relación")
         apply.clicked.connect(self.owner.apply_dimension)
         self.dimension_section.layout.addWidget(apply)
@@ -324,6 +353,7 @@ class ManagerDock(QtWidgets.QDockWidget):
     def _sections(self, feature=False, sketch=False, obj=False):
         self.feature_section.setVisible(feature)
         self.sketch_section.setVisible(sketch)
+        self.slot_section.setVisible(sketch)
         self.dimension_section.setVisible(sketch)
         self.object_section.setVisible(obj)
         self.accept.setVisible(feature or sketch)
@@ -355,12 +385,16 @@ class ManagerDock(QtWidgets.QDockWidget):
             self.operation, self.operation_object_name = kind, obj.Name
             self.property_title.setText(backend.FEATURES[kind][2])
             self.selection_box.setText(obj.Label)
-            labels = {"revolution": ("Ángulo", "Angle", 360), "fillet": ("Radio", "Radius", 2), "chamfer": ("Distancia", "Size", 2)}
+            labels = {"revolution": ("Ángulo", "Angle", 360), "polar_pattern": ("Ángulo total", "Angle", 360), "linear_pattern": ("Separación", "Length", 20), "fillet": ("Radio", "Radius", 2), "chamfer": ("Distancia", "Size", 2)}
             label, prop, default = labels.get(kind, ("Profundidad", "Length", 20))
             self.value_label.setText(label)
-            self.value.setSuffix(" °" if kind == "revolution" else " mm")
-            self.value.setMaximum(360 if kind == "revolution" else 1000000)
-            self.value.setValue(float(getattr(obj, prop, default)))
+            angular = kind in ("revolution", "polar_pattern")
+            self.value.setSuffix(" °" if angular else " mm")
+            self.value.setMaximum(360 if angular else 1000000)
+            value = float(getattr(obj, prop, default))
+            if kind == "linear_pattern":
+                value /= max(1, int(obj.Occurrences) - 1)
+            self.value.setValue(value)
             self.reverse.setChecked(bool(getattr(obj, "Reversed", False)))
             symmetric = str(getattr(obj, "SideType", "")) == "Symmetric" or bool(getattr(obj, "Midplane", False))
             self.symmetric.setChecked(symmetric)
@@ -368,16 +402,32 @@ class ManagerDock(QtWidgets.QDockWidget):
             axis = getattr(obj, "ReferenceAxis", None)
             self.axis.setCurrentIndex(1 if axis and axis[1] and axis[1][0] == "H_Axis" else 0)
             for control in (self.reverse, self.symmetric):
-                control.setVisible(kind in ("pad", "pocket", "revolution"))
+                control.setVisible(kind in ("pad", "pocket", "revolution") or (control is self.reverse and kind in backend.PATTERNS))
             self.through.setVisible(kind == "pocket")
             self.axis.setVisible(kind == "revolution")
+            self.pattern_controls.setVisible(kind in backend.PATTERNS)
+            if kind in backend.PATTERNS:
+                self.pattern_count.setValue(int(obj.Occurrences))
+                reference = getattr(obj, "Direction" if kind == "linear_pattern" else "Axis", None)
+                name = getattr(reference[0], "Role", "")[:1] if reference and reference[0] is not None else ("Z" if kind == "polar_pattern" else "X")
+                self.pattern_axis.setCurrentIndex(max(0, self.pattern_axis.findData(name)))
+                self.selection_box.setText("Operación original: " + ", ".join(o.Label for o in obj.Originals))
             self.preview.setChecked(True)
             self._sections(feature=True)
         finally:
             self._loading = False
 
     def feature_values(self):
-        return dict(value=self.value.value(), reverse=self.reverse.isChecked(), symmetric=self.symmetric.isChecked(), through=self.through.isChecked(), axis=self.axis.currentData(), preview=self.preview.isChecked())
+        return dict(value=self.value.value(), reverse=self.reverse.isChecked(), symmetric=self.symmetric.isChecked(), through=self.through.isChecked(), axis=self.axis.currentData(), preview=self.preview.isChecked(), count=self.pattern_count.value(), pattern_axis=self.pattern_axis.currentData())
+
+    def _constraint_changed(self, *args):
+        kind = self.constraint.currentData()
+        paired = kind in ("Tangent", "Concentric", "Parallel", "Perpendicular", "Equal")
+        self.geometry2.setVisible(paired)
+        self.dimension_value.setEnabled(kind in ("Distance", "Radius", "Diameter", "Angle"))
+        self.dimension_value.setSuffix(" °" if kind == "Angle" else " mm")
+        self.dimension_value.setMinimum(0 if kind == "Angle" else 0.001)
+        self.dimension_value.setMaximum(359.999 if kind == "Angle" else 1000000)
 
     def _parameters_changed(self, *args):
         self.value.setEnabled(not (self.operation == "pocket" and self.through.isChecked()))
@@ -391,12 +441,17 @@ class ManagerDock(QtWidgets.QDockWidget):
         if sketch is None:
             return
         previous = self.geometry.currentData()
+        previous_second = self.geometry2.currentData()
         self.geometry.clear()
+        self.geometry2.clear()
         for i, geometry in enumerate(sketch.Geometry):
-            label = "Círculo" if hasattr(geometry, "Radius") else "Línea"
+            label = backend.geometry_kind(geometry)
             self.geometry.addItem(f"{i + 1} · {label}", i)
+            self.geometry2.addItem(f"{i + 1} · {label}", i)
         index = self.geometry.findData(previous)
         self.geometry.setCurrentIndex(index if index >= 0 else max(0, self.geometry.count() - 1))
+        index = self.geometry2.findData(previous_second)
+        self.geometry2.setCurrentIndex(index if index >= 0 else 0)
         state = "Definido" if getattr(sketch, "FullyConstrained", False) else "Subdefinido"
         self.definition.setText(f"{state} · {sketch.GeometryCount} entidades\n{sketch.ConstraintCount} restricciones")
 

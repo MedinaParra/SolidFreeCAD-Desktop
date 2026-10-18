@@ -13,7 +13,7 @@ from .widgets import Ribbon, CommandButton
 from .manager import ManagerDock
 from .sketch_interaction import SketchInteractionController
 
-VERSION = "0.1.0-alpha.12"
+VERSION = "0.1.0-alpha.13"
 _window = None
 
 
@@ -106,11 +106,17 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
             ("revolution", "Revolución", lambda: self.begin_feature("revolution"), "revolution", "", "Girar un perfil alrededor de su eje horizontal o vertical"),
             ("fillet", "Redondeo", lambda: self.begin_feature("fillet"), "fillet", "", "Seleccione aristas con Ctrl + clic para aplicar un radio"),
             ("chamfer", "Chaflán", lambda: self.begin_feature("chamfer"), "chamfer", "", "Seleccione aristas y defina la distancia del chaflán"),
+            ("linear_pattern", "Patrón lineal", lambda: self.begin_feature("linear_pattern"), "linear_pattern", "", "Repetir un Saliente, Corte o Revolución con separación constante"),
+            ("polar_pattern", "Patrón circular", lambda: self.begin_feature("polar_pattern"), "polar_pattern", "", "Repetir una operación alrededor de un eje del cuerpo"),
             ("edit", "Editar operación", self.edit_selected, "edit", "", "Editar los parámetros nativos del elemento seleccionado"),
             ("rename", "Cambiar nombre", self.rename_selected, "edit", "F2", "Cambiar el nombre del elemento seleccionado"),
             ("delete", "Eliminar", self.delete_selected, "cancel", "Delete", "Eliminar un elemento sin dependencias posteriores"),
             ("visibility", "Mostrar/ocultar", self.toggle_visibility, "eye", "Space", "Mostrar u ocultar el elemento seleccionado"),
             ("line", "Línea", lambda: self.start_tool("line"), "line", "", "Dos clics · ajuste a extremos, origen, horizontal y vertical"),
+            ("polyline", "Polilínea", lambda: self.start_tool("polyline"), "polyline", "", "Clics sucesivos · vuelva al inicio para cerrar · Enter termina"),
+            ("arc", "Arco de 3 puntos", lambda: self.start_tool("arc"), "arc", "", "Seleccione inicio, punto intermedio y final del arco"),
+            ("slot", "Ranura recta", self.add_slot, "slot", "", "Crear una ranura con longitud total y ancho editables en Propiedades"),
+            ("trim", "Recortar", lambda: self.start_tool("trim"), "trim", "", "Seleccione un tramo del croquis para recortar entre intersecciones"),
             ("rectangle", "Rectángulo", lambda: self.start_tool("rectangle"), "rectangle", "", "Dos esquinas opuestas con vista preliminar"),
             ("circle", "Círculo", lambda: self.start_tool("circle"), "circle", "", "Centro y punto de radio con vista preliminar"),
             ("rectangle_numeric", "Rectángulo", self.add_rectangle, "rectangle", "", "Crear un rectángulo con cotas de ancho y alto"),
@@ -152,7 +158,7 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         brand = QtWidgets.QLabel("SolidFreeCAD")
         brand.setObjectName("Brand")
         row.addWidget(brand)
-        for text, keys in [("Archivo", ("new", "open", "save", "save_as", "export")), ("Edición", ("undo", "redo", "edit", "rename", "delete")), ("Ver", ("iso", "front", "top", "right", "fit", "shaded", "wireframe")), ("Insertar", ("sketch", "pad", "pocket", "revolution", "fillet", "chamfer"))]:
+        for text, keys in [("Archivo", ("new", "open", "save", "save_as", "export")), ("Edición", ("undo", "redo", "edit", "rename", "delete")), ("Ver", ("iso", "front", "top", "right", "fit", "shaded", "wireframe")), ("Insertar", ("sketch", "pad", "pocket", "revolution", "fillet", "chamfer", "linear_pattern", "polar_pattern"))]:
             button = QtWidgets.QToolButton()
             button.setText(text)
             button.setAutoRaise(True)
@@ -230,9 +236,9 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         if doc is not None and not active:
             self.actions["undo"].setEnabled(doc.UndoCount > 0)
             self.actions["redo"].setEnabled(doc.RedoCount > 0)
-        for key in ("pad", "pocket", "revolution", "fillet", "chamfer", "sketch"):
+        for key in ("pad", "pocket", "revolution", "fillet", "chamfer", "sketch", "linear_pattern", "polar_pattern"):
             self.actions[key].setEnabled(not active)
-        for key in ("line", "rectangle", "circle", "rectangle_numeric", "circle_numeric", "dimension"):
+        for key in ("line", "polyline", "arc", "slot", "trim", "rectangle", "circle", "rectangle_numeric", "circle_numeric", "dimension"):
             self.actions[key].setEnabled(sketch)
         for key in ("edit", "rename", "delete", "visibility"):
             self.actions[key].setEnabled(selected and not active)
@@ -285,6 +291,12 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         self.manager.refresh_sketch()
         self.state.setText("Círculo creado con radio editable")
 
+    def add_slot(self):
+        self.sketch_interaction.cancel(silent=True)
+        backend.add_slot(self.manager.slot_length.value(), self.manager.slot_width.value())
+        self.manager.refresh_sketch()
+        self.state.setText("Ranura creada · radio y tramo recto editables en Cotas y relaciones")
+
     def show_dimensions(self):
         self.manager.modes.setCurrentIndex(1)
         self.manager.dimension_section.header.setChecked(True)
@@ -296,7 +308,11 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
             if not isinstance(self.session, backend.SketchSession) or self.manager.geometry.currentData() is None:
                 raise ValueError("Seleccione una entidad del croquis.")
             self.sketch_interaction.cancel(silent=True)
-            backend.constrain_geometry(self.session.sketch, self.manager.geometry.currentData(), self.manager.constraint.currentData(), self.manager.dimension_value.value())
+            kind = self.manager.constraint.currentData()
+            if kind in ("Tangent", "Concentric", "Parallel", "Perpendicular", "Equal"):
+                backend.constrain_pair(self.session.sketch, self.manager.geometry.currentData(), self.manager.geometry2.currentData(), kind)
+            else:
+                backend.constrain_geometry(self.session.sketch, self.manager.geometry.currentData(), kind, self.manager.dimension_value.value())
             self.manager.refresh_sketch()
             self.state.setText("Cota / relación aplicada")
         self._run(apply)
@@ -305,8 +321,9 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
         if self.session is not None:
             raise ValueError("Acepte o cancele la operación actual.")
         edges = backend.selected_edges() if feature is None and kind in ("fillet", "chamfer") else None
-        profile = backend.active_sketch() if feature is None and edges is None else None
-        self.session = backend.FeatureSession(kind, profile=profile, edge_selection=edges, feature=feature)
+        source = backend.selected_pattern_source() if feature is None and kind in backend.PATTERNS else None
+        profile = backend.active_sketch() if feature is None and edges is None and source is None else None
+        self.session = backend.FeatureSession(kind, profile=profile, edge_selection=edges, feature=feature, pattern_source=source)
         self.manager.begin_feature(self.session)
         self.ribbon.setCurrentIndex(0)
         backend.axonometric_view()
@@ -375,6 +392,8 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
                 detail = f"Ancho {abs(dx):.3f} · Alto {abs(dy):.3f} mm"
             elif tool == "circle":
                 detail = f"Radio {math.hypot(dx, dy):.3f} mm"
+            elif tool == "arc":
+                detail = "Arco · seleccione el punto final" if self.sketch_interaction.middle_point is not None else "Arco · seleccione el punto intermedio"
             else:
                 detail = f"Longitud {math.hypot(dx, dy):.3f} mm"
             self.state.setText(detail + " · clic para confirmar · Esc para cancelar")
@@ -383,7 +402,12 @@ class SolidFreeCADWindow(QtWidgets.QMainWindow):
 
     def on_sketch_tool_completed(self, tool):
         self.manager.refresh_sketch()
-        self.manager.message.setText("Entidad creada. Continúe dibujando o acepte el croquis.")
+        if self.sketch_interaction.active and tool == "polyline":
+            self.manager.message.setText("Continúe con otro punto; vuelva al inicio para cerrar o pulse Enter.")
+        elif tool == "trim":
+            self.manager.message.setText("Tramo recortado. Seleccione otro tramo o pulse Esc.")
+        else:
+            self.manager.message.setText("Entidad creada. Continúe dibujando o acepte el croquis.")
         self.refresh(True)
 
     def on_sketch_tool_cancelled(self):

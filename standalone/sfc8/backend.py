@@ -14,13 +14,18 @@ import FreeCADGui as Gui
 import Part
 import Sketcher
 
+from .sketch_geometry import arc_through_points, distance, TOLERANCE
+
 FEATURES = {
     "pad": ("PartDesign::Pad", "Pad", "Saliente/Base"),
     "pocket": ("PartDesign::Pocket", "Pocket", "Corte extruido"),
     "revolution": ("PartDesign::Revolution", "Revolution", "Revolución"),
     "fillet": ("PartDesign::Fillet", "Fillet", "Redondeo"),
     "chamfer": ("PartDesign::Chamfer", "Chamfer", "Chaflán"),
+    "linear_pattern": ("PartDesign::LinearPattern", "LinearPattern", "Patrón lineal"),
+    "polar_pattern": ("PartDesign::PolarPattern", "PolarPattern", "Patrón circular"),
 }
+PATTERNS = ("linear_pattern", "polar_pattern")
 _editing_sketch = None
 
 
@@ -211,6 +216,12 @@ class SketchSession:
                 for dependent in sketch.InListRecursive:
                     if dependent.TypeId in {spec[0] for spec in FEATURES.values()}:
                         dependent.Visibility = False
+            elif face is None:
+                # A reference plane can lie inside the existing solid. Keep its
+                # new profile visible; restore the model on accept or cancel.
+                for member in body_of(self.sketch).Group:
+                    if member != self.sketch and hasattr(member, "Shape"):
+                        member.Visibility = False
             self.sketch.Visibility = True
             _editing_sketch = (self.doc.Name, self.sketch.Name)
             prepare_sketch_view(self.sketch)
@@ -223,9 +234,7 @@ class SketchSession:
         self.doc.recompute()
         if self.sketch.solve() != 0:
             raise ValueError("El croquis contiene restricciones incompatibles.")
-        for dependent in self.sketch.InListRecursive:
-            if dependent.TypeId in {spec[0] for spec in FEATURES.values()} and "Invalid" in dependent.State:
-                raise ValueError("El croquis invalida una operación posterior: " + dependent.Label)
+        _validate_dependents(self.sketch)
         self.doc.commitTransaction()
         self.closed = True
         _editing_sketch = None
@@ -322,42 +331,220 @@ def add_circle_points(center, rim_point):
 
 
 def add_line_points(first, second):
-    _valid_number(math.hypot(second[0] - first[0], second[1] - first[1]))
+    _valid_number(distance(first, second))
     sketch = active_sketch()
-    index = sketch.addGeometry(Part.LineSegment(App.Vector(*first, 0), App.Vector(*second, 0)), False)
-    if abs(first[1] - second[1]) < 1e-7:
-        sketch.addConstraint(Sketcher.Constraint("Horizontal", index))
-    elif abs(first[0] - second[0]) < 1e-7:
-        sketch.addConstraint(Sketcher.Constraint("Vertical", index))
+    if sketch is None:
+        raise ValueError("Abra un croquis antes de dibujar.")
+    # Snapped endpoints become persistent solver relations, so later dimensions
+    # cannot silently open a polyline that initially looked closed.
+    references = [_coincident_reference(sketch, p) for p in (first, second)]
+    geometry, count = sketch.Geometry, sketch.ConstraintCount
+    try:
+        index = sketch.addGeometry(Part.LineSegment(App.Vector(*first, 0), App.Vector(*second, 0)), False)
+        for position, reference in enumerate(references, 1):
+            if reference is not None:
+                sketch.addConstraint(Sketcher.Constraint("Coincident", index, position, *reference))
+        if abs(first[1] - second[1]) < TOLERANCE:
+            sketch.addConstraint(Sketcher.Constraint("Horizontal", index))
+        elif abs(first[0] - second[0]) < TOLERANCE:
+            sketch.addConstraint(Sketcher.Constraint("Vertical", index))
+        if sketch.solve() != 0 or not _sketch_geometry_valid(sketch):
+            raise ValueError("La línea produce relaciones redundantes o incompatibles.")
+    except Exception:
+        while sketch.ConstraintCount > count:
+            sketch.delConstraint(sketch.ConstraintCount - 1)
+        while sketch.GeometryCount > len(geometry):
+            sketch.delGeometry(sketch.GeometryCount - 1)
+        sketch.Geometry = geometry
+        sketch.solve()
+        sketch.Document.recompute()
+        raise
     sketch.Document.recompute()
     return sketch, index
 
 
-def constrain_geometry(sketch, index, kind, value=None):
-    if kind in ("Radius", "Distance"):
+def _coincident_reference(sketch, point):
+    if distance(point, (0, 0)) <= TOLERANCE:
+        return -1, 1
+    for index, geometry in enumerate(sketch.Geometry):
+        for position, attribute in ((1, "StartPoint"), (2, "EndPoint"), (3, "Center")):
+            candidate = getattr(geometry, attribute, None)
+            if candidate is not None and distance(point, (candidate.x, candidate.y)) <= TOLERANCE:
+                return index, position
+    return None
+
+
+def add_arc_points(start, middle, end):
+    arc_through_points(start, middle, end)
+    sketch = active_sketch()
+    if sketch is None:
+        raise ValueError("Abra un croquis antes de dibujar.")
+    geometry = Part.Arc(App.Vector(*start, 0), App.Vector(*middle, 0), App.Vector(*end, 0))
+    index = sketch.addGeometry(geometry, False)
+    sketch.Document.recompute()
+    return sketch, index
+
+
+def add_slot(length, width):
+    """A straight obround with native tangent, radius and length constraints."""
+    length, width = _valid_number(length), _valid_number(width)
+    if length <= width + TOLERANCE:
+        raise ValueError("La longitud total de la ranura debe ser mayor que su ancho.")
+    sketch = active_sketch()
+    if sketch is None:
+        raise ValueError("Abra un croquis antes de dibujar.")
+    r, half = width / 2, (length - width) / 2
+    # Sketcher stores circular arcs counterclockwise about the sketch normal.
+    # Trace the whole wire in that direction so endpoint tangencies stay exact.
+    p = [App.Vector(half, r, 0), App.Vector(-half, r, 0), App.Vector(-half, -r, 0), App.Vector(half, -r, 0)]
+    before_geometry, before_constraints = sketch.GeometryCount, sketch.ConstraintCount
+    try:
+        indices = sketch.addGeometry([
+            Part.LineSegment(p[0], p[1]),
+            Part.ArcOfCircle(Part.Circle(App.Vector(-half, 0, 0), App.Vector(0, 0, 1), r), math.pi / 2, 3 * math.pi / 2),
+            Part.LineSegment(p[2], p[3]),
+            Part.ArcOfCircle(Part.Circle(App.Vector(half, 0, 0), App.Vector(0, 0, 1), r), -math.pi / 2, math.pi / 2),
+        ], False)
+        for i in range(4):
+            sketch.addConstraint(Sketcher.Constraint("Tangent", indices[i], 2, indices[(i + 1) % 4], 1))
+        sketch.addConstraint(Sketcher.Constraint("Horizontal", indices[0]))
+        sketch.addConstraint(Sketcher.Constraint("Horizontal", indices[2]))
+        sketch.addConstraint(Sketcher.Constraint("Radius", indices[1], r))
+        sketch.addConstraint(Sketcher.Constraint("Distance", indices[0], length - width))
+        if sketch.solve() != 0:
+            raise ValueError("No se pudo resolver la geometría de la ranura.")
+        sketch.Document.recompute()
+    except Exception:
+        while sketch.ConstraintCount > before_constraints:
+            sketch.delConstraint(sketch.ConstraintCount - 1)
+        while sketch.GeometryCount > before_geometry:
+            sketch.delGeometry(sketch.GeometryCount - 1)
+        sketch.solve()
+        sketch.Document.recompute()
+        raise
+    fit_view()
+    return sketch, indices
+
+
+def geometry_kind(geometry):
+    if isinstance(geometry, Part.ArcOfCircle):
+        return "Arco"
+    if isinstance(geometry, Part.Circle):
+        return "Círculo"
+    if isinstance(geometry, Part.LineSegment):
+        return "Línea"
+    return "Geometría"
+
+
+def nearest_geometry(point, tolerance):
+    sketch = active_sketch()
+    if sketch is None:
+        raise ValueError("Abra un croquis antes de recortar.")
+    vertex = Part.Vertex(App.Vector(*point, 0))
+    candidates = []
+    for index, geometry in enumerate(sketch.Geometry):
+        if not sketch.getConstruction(index):
+            candidates.append((geometry.toShape().distToShape(vertex)[0], index))
+    if not candidates or min(candidates)[0] > tolerance:
+        raise ValueError("Seleccione un tramo del croquis para recortar.")
+    return min(candidates)[1]
+
+
+def trim_geometry(index, point):
+    sketch = active_sketch()
+    if sketch is None or not 0 <= index < sketch.GeometryCount:
+        raise ValueError("Seleccione una entidad del croquis activo.")
+    sketch.trim(index, App.Vector(*point, 0))
+    sketch.Document.recompute()
+    return sketch
+
+
+def _constraint_value(kind, value):
+    if kind == "Angle":
+        value = float(value)
+        if not math.isfinite(value) or not 0 <= value < 360:
+            raise ValueError("El ángulo debe estar entre 0° y 360° sin incluir 360°.")
+        return value
+    if kind in ("Radius", "Diameter", "Distance"):
         value = _valid_number(value)
-    else:
-        value = None
+        return value
+    return None
+
+
+def _set_datum(sketch, index, kind, value):
+    unit = "deg" if kind == "Angle" else "mm"
+    sketch.setDatum(index, App.Units.Quantity(f"{value} {unit}"))
+
+
+def _sketch_geometry_valid(sketch):
+    # A numerical solution may collapse unconstrained lines to zero length to
+    # satisfy contradictory relations. solve() alone does not catch that case.
+    try:
+        for geometry in sketch.Geometry:
+            shape = geometry.toShape()
+            if shape.isNull() or not shape.isValid():
+                return False
+            if isinstance(geometry, (Part.LineSegment, Part.ArcOfCircle, Part.Circle)) and shape.Length <= TOLERANCE:
+                return False
+    except Exception:
+        return False
+    return True
+
+
+def _add_solved_constraint(sketch, constraint):
+    geometry, count = sketch.Geometry, sketch.ConstraintCount
+    try:
+        index = sketch.addConstraint(constraint)
+        if sketch.solve() != 0 or not _sketch_geometry_valid(sketch):
+            raise ValueError("Restricción redundante, incompatible o con geometría degenerada.")
+        sketch.Document.recompute()
+        return index
+    except Exception:
+        while sketch.ConstraintCount > count:
+            sketch.delConstraint(sketch.ConstraintCount - 1)
+        sketch.Geometry = geometry
+        sketch.solve()
+        sketch.Document.recompute()
+        raise
+
+
+def constrain_geometry(sketch, index, kind, value=None):
+    value = _constraint_value(kind, value)
     # Editing an existing dimension changes its datum instead of adding a conflict.
     for i, constraint in enumerate(sketch.Constraints):
         if constraint.Type == kind and constraint.First == index:
             if value is not None:
-                old = constraint.Value
-                sketch.setDatum(i, App.Units.Quantity(f"{value} mm"))
-                if sketch.solve() != 0:
-                    sketch.setDatum(i, App.Units.Quantity(f"{old} mm"))
+                old = math.degrees(constraint.Value) if kind == "Angle" else constraint.Value
+                geometry = sketch.Geometry
+                try:
+                    _set_datum(sketch, i, kind, value)
+                    if sketch.solve() != 0 or not _sketch_geometry_valid(sketch):
+                        raise ValueError("La cota entra en conflicto con otras restricciones.")
+                except Exception:
+                    _set_datum(sketch, i, kind, old)
+                    sketch.Geometry = geometry
                     sketch.solve()
-                    raise ValueError("La cota entra en conflicto con otras restricciones.")
+                    sketch.Document.recompute()
+                    raise
             sketch.Document.recompute()
             return i
-    args = (kind, index) if value is None else (kind, index, value)
-    index = sketch.addConstraint(Sketcher.Constraint(*args))
-    if sketch.solve() != 0:
-        sketch.delConstraint(index)
-        sketch.solve()
-        raise ValueError("Restricción redundante o incompatible.")
-    sketch.Document.recompute()
-    return index
+    native_value = math.radians(value) if kind == "Angle" else value
+    args = (kind, index) if value is None else (kind, index, native_value)
+    return _add_solved_constraint(sketch, Sketcher.Constraint(*args))
+
+
+def constrain_pair(sketch, first, second, kind):
+    if first is None or second is None or first == second:
+        raise ValueError("Seleccione dos entidades distintas.")
+    if kind == "Concentric":
+        if any(not hasattr(sketch.Geometry[i], "Radius") for i in (first, second)):
+            raise ValueError("La concentricidad requiere dos círculos o arcos.")
+        constraint = Sketcher.Constraint("Coincident", first, 3, second, 3)
+    elif kind in ("Tangent", "Parallel", "Perpendicular", "Equal"):
+        constraint = Sketcher.Constraint(kind, first, second)
+    else:
+        raise ValueError("Relación de dos entidades no admitida.")
+    return _add_solved_constraint(sketch, constraint)
 
 
 def selected_edges():
@@ -378,16 +565,104 @@ def selected_edges():
     return source, list(dict.fromkeys(edges))
 
 
+def selected_pattern_source():
+    source = selected_object()
+    if source is not None and source.TypeId == "PartDesign::Body":
+        source = source.Tip
+    if source is None or source.TypeId not in ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Revolution"):
+        raise ValueError("Seleccione en el árbol un Saliente, Corte o Revolución para repetir.")
+    return source
+
+
+def body_axis_reference(body, name):
+    if name not in ("X", "Y", "Z"):
+        raise ValueError("Seleccione el eje X, Y o Z del cuerpo.")
+    axis = next((o for o in body.Origin.OriginFeatures if getattr(o, "Role", "") == name + "_Axis"), None)
+    if axis is None:
+        raise ValueError("No se encontró el eje del cuerpo.")
+    return axis, [""]
+
+
+def _validate_pattern_instances(feature, kind, value, count, axis, reverse):
+    """Native cuts can silently skip copies outside the support solid."""
+    direction = {"X": App.Vector(1, 0, 0), "Y": App.Vector(0, 1, 0), "Z": App.Vector(0, 0, 1)}[axis]
+    sign = -1 if reverse else 1
+    for source in feature.Originals:
+        tool = source.AddSubShape.copy()
+        tool.transformShape((feature.Placement.inverse() * source.Placement).toMatrix())
+        tolerance = max(1e-7, tool.Volume * 1e-7)
+        support = None
+        if source.TypeId == "PartDesign::Pocket":
+            # Restore the original removed material to the current support, so
+            # overlapping copies are allowed but copies in empty space are not.
+            removed = source.BaseFeature.Shape.cut(source.Shape)
+            removed.transformShape((feature.Placement.inverse() * source.Placement).toMatrix())
+            support = feature.BaseFeature.Shape.fuse(removed)
+        for occurrence in range(1, count):
+            copy = tool.copy()
+            if kind == "linear_pattern":
+                copy.translate(direction * (sign * value * occurrence))
+            else:
+                step = value / (count if math.isclose(value, 360, abs_tol=1e-7) else count - 1)
+                copy.rotate(App.Vector(), direction, sign * step * occurrence)
+            if support is not None:
+                missing = copy.common(support).Volume <= tolerance
+            else:
+                missing = copy.cut(feature.Shape).Volume > tolerance
+            if missing:
+                raise ValueError(f"La instancia {occurrence + 1} no se puede aplicar al cuerpo. Revise separación, eje o dirección.")
+
+
+def _validate_dependents(obj):
+    for dependent in obj.InListRecursive:
+        if dependent.TypeId not in {spec[0] for spec in FEATURES.values()}:
+            continue
+        if "Invalid" in dependent.State:
+            raise ValueError("La modificación invalida una operación posterior: " + dependent.Label)
+        kind = next((k for k in PATTERNS if FEATURES[k][0] == dependent.TypeId), None)
+        if kind is None or str(dependent.TransformMode) != "Features" or str(dependent.Mode) != "Extent":
+            continue
+        reference = getattr(dependent, "Direction" if kind == "linear_pattern" else "Axis")
+        role = getattr(reference[0], "Role", "") if reference and reference[0] is not None else ""
+        if role not in ("X_Axis", "Y_Axis", "Z_Axis") or len(dependent.Originals) != 1:
+            continue
+        if dependent.Originals[0].TypeId not in ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Revolution"):
+            continue
+        second = getattr(dependent, "Direction2", None)
+        if second and second[0] is not None:
+            continue
+        count = int(dependent.Occurrences)
+        if not 2 <= count <= 100:
+            continue
+        value = float(dependent.Length) / (count - 1) if kind == "linear_pattern" else float(dependent.Angle)
+        try:
+            _validate_pattern_instances(dependent, kind, value, count, role[0], bool(dependent.Reversed))
+        except ValueError as exc:
+            raise ValueError(dependent.Label + ": " + str(exc)) from exc
+
+
 class FeatureSession:
     """One reversible native feature, including its debounced live preview."""
-    def __init__(self, kind, profile=None, edge_selection=None, feature=None):
+    def __init__(self, kind, profile=None, edge_selection=None, feature=None, pattern_source=None):
         if kind not in FEATURES:
             raise ValueError("Operación desconocida.")
         self.kind = kind
         self.editing = feature is not None
-        reference = feature or profile or (edge_selection[0] if edge_selection else None)
+        reference = feature or pattern_source or profile or (edge_selection[0] if edge_selection else None)
         if reference is None or body_of(reference) is None:
             raise ValueError("Seleccione un perfil o sólido dentro de un cuerpo Part Design.")
+        if kind in PATTERNS:
+            originals = feature.Originals if feature is not None else [pattern_source]
+            if len(originals) != 1 or originals[0] is None or originals[0].TypeId not in ("PartDesign::Pad", "PartDesign::Pocket", "PartDesign::Revolution"):
+                raise ValueError("Esta versión repite una operación Saliente, Corte o Revolución.")
+            if feature is not None:
+                direction = getattr(feature, "Direction" if kind == "linear_pattern" else "Axis")
+                native_axes = body_of(feature).Origin.OriginFeatures
+                second = getattr(feature, "Direction2", None)
+                if (str(feature.Mode) != "Extent" or str(feature.TransformMode) != "Features"
+                        or direction[0] not in native_axes or (second and second[0] is not None)
+                        or not 2 <= int(feature.Occurrences) <= 100):
+                    raise ValueError("Edición disponible para patrones de una dirección, 2–100 instancias, modo Extensión y eje X/Y/Z del cuerpo.")
         self.doc = reference.Document
         self.document_name = self.doc.Name
         self.body = body_of(reference)
@@ -406,6 +681,15 @@ class FeatureSession:
                     self.feature.Profile = profile
                 if edge_selection:
                     self.feature.Base = (edge_selection[0], edge_selection[1])
+                if pattern_source is not None:
+                    self.feature.TransformMode = "Features"
+                    self.feature.Originals = [pattern_source]
+                    if kind == "linear_pattern":
+                        self.feature.Occurrences = 3
+                        self.feature.Length = 40
+                    else:
+                        self.feature.Occurrences = 6
+                        self.feature.Angle = 360
             if "Refine" in self.feature.PropertiesList:
                 self.feature.Refine = True
             if profile is not None:
@@ -418,9 +702,9 @@ class FeatureSession:
             self.cancel()
             raise
 
-    def update(self, value=20.0, reverse=False, symmetric=False, through=False, axis="V_Axis", preview=True):
+    def update(self, value=20.0, reverse=False, symmetric=False, through=False, axis="V_Axis", preview=True, count=3, pattern_axis="X"):
         try:
-            value = _valid_number(value, 360 if self.kind == "revolution" else None)
+            value = _valid_number(value, 360 if self.kind in ("revolution", "polar_pattern") else None)
             obj = self.feature
             if self.kind in ("pad", "pocket"):
                 obj.Type = "ThroughAll" if self.kind == "pocket" and through else "Length"
@@ -434,17 +718,30 @@ class FeatureSession:
                 _set_symmetric(obj, symmetric)
             elif self.kind == "fillet":
                 obj.Radius = value
-            else:
+            elif self.kind == "chamfer":
                 obj.Size = value
+            elif self.kind in PATTERNS:
+                if int(count) != count or not 2 <= count <= 100:
+                    raise ValueError("El patrón admite entre 2 y 100 instancias, incluida la original.")
+                obj.Mode = "Extent"
+                obj.Occurrences = int(count)
+                obj.Reversed = reverse
+                reference = body_axis_reference(self.body, pattern_axis)
+                if self.kind == "linear_pattern":
+                    obj.Direction = reference
+                    obj.Length = value * (int(count) - 1)
+                else:
+                    obj.Axis = reference
+                    obj.Angle = value
             self.doc.recompute()
             shape = obj.Shape
             states = list(obj.State)
             self.valid = not shape.isNull() and shape.isValid() and len(shape.Solids) == 1 and "Invalid" not in states
             if not self.valid:
                 raise ValueError("La operación no genera un sólido válido. Revise perfil, dirección, intersección o medida.")
-            for dependent in obj.InListRecursive:
-                if dependent.TypeId in {spec[0] for spec in FEATURES.values()} and "Invalid" in dependent.State:
-                    raise ValueError("La modificación invalida una operación posterior: " + dependent.Label)
+            if self.kind in PATTERNS:
+                _validate_pattern_instances(obj, self.kind, value, int(count), pattern_axis, reverse)
+            _validate_dependents(obj)
             self.error = ""
         except Exception as exc:
             self.valid = False

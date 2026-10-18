@@ -1,13 +1,13 @@
-name: SolidFreeCAD alpha12 native CAD and Windows packages
+name: SolidFreeCAD alpha13 native CAD and Windows packages
 
 on:
   pull_request:
-    branches: [agent/windows-alpha11-interactive-sketch]
+    branches: [agent/windows-alpha12-solidworks-functions]
     paths:
       - 'standalone/**'
       - 'tests/solidfreecad_standalone_runtime.py'
       - 'scripts/alpha12-windows/**'
-      - '.github/workflows/windows-alpha12-standalone.yml'
+      - '.github/workflows/windows-alpha13-standalone.yml'
   workflow_dispatch:
 
 permissions:
@@ -43,7 +43,7 @@ jobs:
           $expected = ((Get-Content "$asset.sha256" -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
           $actual = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw 'Official runtime checksum mismatch.' }
-          $extract = Join-Path $env:RUNNER_TEMP 'SolidFreeCAD-alpha12-runtime'
+          $extract = Join-Path $env:RUNNER_TEMP 'SolidFreeCAD-alpha13-runtime'
           & 7z x $asset "-o$extract" -y | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'Runtime extraction failed.' }
           $exe = Get-ChildItem $extract -Recurse -Filter FreeCAD.exe | Select-Object -First 1
@@ -85,7 +85,7 @@ jobs:
           $env:SOLIDFREECAD_TEST_OUTPUT = $output
           $env:QT_QPA_PLATFORM = 'windows'
           $env:QT_OPENGL = 'desktop'
-          $env:FREECAD_USER_HOME = Join-Path $env:RUNNER_TEMP 'sfc12-test-user'
+          $env:FREECAD_USER_HOME = Join-Path $env:RUNNER_TEMP 'sfc13-test-user'
           New-Item $env:FREECAD_USER_HOME -ItemType Directory -Force | Out-Null
           $script = Join-Path $env:GITHUB_WORKSPACE 'tests/solidfreecad_standalone_runtime.py'
           $exe = $env:SOLIDFREECAD_ENGINE_EXE
@@ -121,7 +121,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SolidFreeCAD-alpha12-Windows-validation
+          name: SolidFreeCAD-alpha13-Windows-validation
           path: dist/standalone-validation/
           if-no-files-found: warn
           retention-days: 30
@@ -134,11 +134,11 @@ jobs:
           }
       - name: Build standalone portable and installer
         shell: pwsh
-        run: ./scripts/alpha12-windows/Package-Standalone.ps1 -RuntimeRoot $env:SOLIDFREECAD_RUNTIME
+        run: ./scripts/alpha12-windows/Package-Standalone.ps1 -RuntimeRoot $env:SOLIDFREECAD_RUNTIME -ProductVersion "0.1.0-alpha.13"
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
-          name: SolidFreeCAD-0.1.0-alpha.12-Windows-x64
+          name: SolidFreeCAD-0.1.0-alpha.13-Windows-x64
           path: |
             dist/*-Portable.zip
             dist/*-Portable.zip.sha256

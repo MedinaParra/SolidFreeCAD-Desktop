@@ -5,7 +5,7 @@ SolidFreeCAD Desktop is a mechanical-design interface built on the official Free
 ## Current development track
 
 Windows x64 is the delivery priority. The current standalone candidate is
-**0.1.0-alpha.12**, based on the latest alpha.11 branch of 14 October 2026.
+**0.1.0-alpha.13**, extending the validated alpha.12 standalone application.
 Ubuntu and the previous overlay remain preserved.
 
 The application owns its Qt window, menus, CommandManager, FeatureManager and
@@ -14,8 +14,9 @@ Geometry uses native Sketcher and Part Design objects without dispatching native
 workbench commands.
 
 Implemented: sketches on reference planes and planar faces; interactive line,
-rectangle and circle; driving dimensions; native Pad, Pocket, Revolution, Fillet
-and Chamfer; live feature previews with accept/cancel transactions; Undo/Redo;
+polyline, rectangle, circle and three-point arc; tangent obround slots and native
+trimming; driving dimensions and geometric relations; native Pad, Pocket,
+Revolution, Fillet, Chamfer, LinearPattern and PolarPattern; live feature previews with accept/cancel transactions; Undo/Redo;
 FCStd history and STEP exchange; search, filtering, measurement and validation.
 
 See [the current application guide](standalone/README.md) for installation,
